@@ -15,12 +15,9 @@
     "db:generate": "drizzle-kit generate",
     "racore": "node protocol/cli.mjs",
     "protocol:test": "node --test tests/protocol.test.mjs",
-    "daemon": ".venv\\Scripts\\python.exe -m racored.server",
-    "python:test": "set PYTHONPATH=python&& .venv\\Scripts\\python.exe -m pytest python\\tests -q",
-    "daemon:package": ".venv\\Scripts\\pyinstaller.exe --noconfirm --clean --distpath desktop/runtime/python --workpath work/pyinstaller/racored racored.spec && .venv\\Scripts\\pyinstaller.exe --noconfirm --clean --distpath desktop/runtime/python --workpath work/pyinstaller/cli racore-cli.spec",
     "desktop": "electron .",
     "desktop:dev": "concurrently -k -s first \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "desktop:package": "npm run build && npm run daemon:package && electron-builder --win nsis"
+    "desktop:package": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -64,15 +61,6 @@
     ],
     "extraResources": [
       {
-        "from": "python",
-        "to": "python",
-        "filter": [
-          "**/*",
-          "!tests/**/*",
-          "!**/__pycache__/**"
-        ]
-      },
-      {
         "from": "dist",
         "to": "ui",
         "filter": [
@@ -80,11 +68,11 @@
         ]
       },
       {
-        "from": "desktop/runtime/python",
+        "from": "god/build",
         "to": "racored",
         "filter": [
-          "racored.exe",
-          "racore.exe"
+          "racored*",
+          "racore*"
         ]
       },
       {

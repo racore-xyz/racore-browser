@@ -1,98 +1,182 @@
-# vinext-starter
+# Racore Browser
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Agentic browser & open web protocol.
+
+Browse with AI agents. Publish verifiable, portable websites on IPFS. Own your identity and data with self-sovereign domain authority and peer-to-peer mesh networking.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────┐
+│  Electron Desktop (optional)                  │
+│  ┌────────────────────────────────────────┐   │
+│  │  Frontend (Next.js / Vinext / React)   │   │
+│  │  app/lib/racore-client.ts  ──── HTTP ───┼───┤
+│  └────────────────────────────────────────┘   │
+│                       │ IPC bridge (packaged)  │
+└───────────────────────┼──────────────────────┘
+                        │
+┌───────────────────────▼──────────────────────┐
+│  racored (Go daemon)  127.0.0.1:47831         │
+│                                               │
+│  ┌─────────┐ ┌──────────┐ ┌──────────────┐   │
+│  │ Vault   │ │ Gateway  │ │ Mesh Network │   │
+│  │ (AES)   │ │(AI APIs) │ │ (libp2p/mcast)│   │
+│  ├─────────┤ ├──────────┤ ├──────────────┤   │
+│  │ IPFS    │ │ Kubo     │ │ Authority    │   │
+│  │ Bridge  │ │ Manager  │ │ (Domains)    │   │
+│  └─────────┘ └──────────┘ └──────────────┘   │
+└──────────────────────────────────────────────┘
+```
 
 ## Prerequisites
 
-- Node.js `>=22.13.0`
+- **Node.js** `>=22.13.0`
+- **Go** `>=1.21`
 
 ## Quick Start
 
 ```bash
+# Install frontend dependencies
 npm install
+
+# Build the Go daemon
+cd god && go build -o build/racored ./cmd/racored/ && cd ..
+
+# Start the daemon
+./god/build/racored &
+
+# Start the frontend (dev mode)
 npm run dev
-npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Open http://localhost:3000 in your browser.
 
-## Included Shape
+## Project Structure
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```
+racore-browser/
+├── app/                    # Next.js frontend (React)
+│   ├── components/         # UI components
+│   ├── lib/
+│   │   └── racore-client.ts   # API client for Go daemon
+│   └── page.tsx            # Home page
+├── desktop/                # Electron shell
+│   ├── main.cjs            # Electron main process
+│   └── preload.cjs         # Context bridge
+├── god/                    # Go backend (daemon + CLI)
+│   ├── build/              # Compiled binaries
+│   ├── cmd/
+│   │   ├── racored/        # Daemon entrypoint
+│   │   └── racore/         # CLI tool entrypoint
+│   ├── internal/
+│   │   ├── server/         # HTTP server + REST API
+│   │   ├── vault/          # Encrypted key storage (AES-GCM)
+│   │   ├── providers/      # AI provider catalog
+│   │   ├── gateway/        # AI API routing
+│   │   ├── mesh/           # P2P multicast mesh
+│   │   ├── transport/      # UDP multicast transport
+│   │   ├── ipfs/           # IPFS content bridge
+│   │   ├── kubo/           # Embedded Kubo manager
+│   │   ├── authority/      # Domain identity + delegation
+│   │   ├── identity/       # DID key generation
+│   │   ├── peer/           # Peer store
+│   │   ├── protocol/       # Protocol message signing
+│   │   └── config/         # Configuration loader
+│   └── pkg/api/            # Shared API types
+├── dist/                   # Frontend build output
+├── worker/                 # Cloudflare Worker
+├── tests/                  # Protocol tests
+├── package.json
+└── vite.config.ts
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+## Go Backend (god/)
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+The `god/` directory contains a complete rewrite of the original Python backend in Go.
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+### Building
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+```bash
+# Build for current platform
+cd god && go build -o build/racored ./cmd/racored/
+go build -o build/racore ./cmd/racore/
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+# Cross-compile all targets
+./scripts/build.sh
+```
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+### Running
 
-## Useful Commands
+```bash
+# Start the daemon
+RACORE_DATA_DIR=/path/to/data ./god/build/racored
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+# Use the CLI
+./god/build/racore --help
+```
 
-## Learn More
+### Testing
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+```bash
+cd god
+go test -race -count=1 ./internal/...
+go vet ./...
+```
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | System health, version, status |
+| GET | `/v1/providers` | List AI providers |
+| PUT | `/v1/providers/{id}/connect` | Store API key for provider |
+| DELETE | `/v1/providers/{id}` | Remove provider connection |
+| GET | `/v1/providers/{id}/health` | Check provider health |
+| POST | `/v1/chat` | Send chat completion request |
+| GET | `/v1/ipfs/status` | IPFS node status |
+| POST | `/v1/ipfs/add` | Upload file to IPFS |
+| POST | `/v1/ipfs/pin/{cid}` | Pin a CID |
+| GET | `/v1/mesh/status` | Mesh node status |
+| GET | `/v1/mesh/peers` | Mesh peer list |
+| POST | `/v1/mesh/broadcast` | Broadcast message over mesh |
+| GET | `/v1/authority/domains` | List claimed domains |
+| POST | `/v1/authority/domains` | Claim a domain |
+| GET | `/v1/authority/domains/{domain}/available` | Check domain availability |
+| GET | `/v1/authority/domains/{domain}/releases` | List domain releases |
+| POST | `/v1/authority/domains/{domain}/releases` | Publish release |
+| POST | `/v1/authority/domains/{domain}/delegate` | Create delegation |
+| WS | `/v1/events` | Real-time event stream |
+
+### AI Providers
+
+9 built-in providers: OpenAI, Anthropic, Google Gemini, OpenRouter, Kimi/Moonshot, Ollama (local), OpenCode (local), Claude Code (local), Kimi Code (local).
+
+## Desktop App
+
+```bash
+# Development mode (frontend + Electron)
+npm run desktop:dev
+
+# Package for distribution
+npm run desktop:package
+```
+
+The Electron app (`desktop/main.cjs`) starts `god/build/racored` as a child process, waits for it to become ready on port 47831, then loads the frontend UI.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start frontend dev server |
+| `npm run build` | Build frontend for production |
+| `npm start` | Start production frontend server |
+| `npm run desktop` | Launch Electron app |
+| `npm run desktop:dev` | Dev mode with live reload |
+| `npm run desktop:package` | Package Electron distributable |
+| `npm test` | Build + run protocol tests |
+| `cd god && go test ./internal/...` | Run Go backend tests |
+
+## License
+
+Proprietary.

@@ -25,24 +25,20 @@ function projectRoot() {
 }
 
 function daemonCommand() {
+  const root = projectRoot();
+  const godBinary = app.isPackaged
+    ? path.join(root, "racored", "racored.exe")
+    : path.join(root, "god", "build", "racored");
+  if (fs.existsSync(godBinary))
+    return { executable: godBinary, args: [] };
   if (process.env.RACORE_PYTHON)
     return {
       executable: process.env.RACORE_PYTHON,
       args: ["-m", "racored.server"],
     };
-  const root = projectRoot();
   if (app.isPackaged)
     return { executable: path.join(root, "racored", "racored.exe"), args: [] };
-  const candidates = [
-    path.join(root, ".venv", "Scripts", "python.exe"),
-    "python",
-  ];
-  return {
-    executable: candidates.find(
-      (candidate) => candidate === "python" || fs.existsSync(candidate),
-    ),
-    args: ["-m", "racored.server"],
-  };
+  return { executable: "python", args: ["-m", "racored.server"] };
 }
 
 function waitForDaemon(timeout = 15000) {
@@ -129,13 +125,11 @@ async function startDaemon() {
     if (response.ok) return;
   } catch {}
   const root = projectRoot();
-  const moduleRoot = path.join(root, "python");
   const command = daemonCommand();
   daemon = spawn(command.executable, command.args, {
-    cwd: moduleRoot,
+    cwd: root,
     env: {
       ...process.env,
-      PYTHONPATH: moduleRoot,
       RACORE_KUBO_PATH: app.isPackaged
         ? path.join(root, "kubo", "ipfs.exe")
         : path.join(root, "desktop", "runtime", "kubo", "ipfs.exe"),

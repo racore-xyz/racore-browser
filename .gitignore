@@ -50,3 +50,4 @@ next-env.d.ts
 python/.pytest_cache/
 python/**/__pycache__/
 desktop/runtime/
+package-lock.json

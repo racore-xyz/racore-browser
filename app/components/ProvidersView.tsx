@@ -106,7 +106,7 @@ export function ProvidersView() {
               id,
               name: id,
               kind: "",
-              default_model: "",
+              defaultModel: "",
               free: false,
               local: false,
               connected: false,
@@ -125,7 +125,7 @@ export function ProvidersView() {
             </header>
             <div className="provider-model">
               <span>Default model</span>
-              <code>{provider.default_model || "Detect after connection"}</code>
+              <code>{provider.defaultModel || "Detect after connection"}</code>
             </div>
             <div className="provider-tags">
               <span>{provider.free ? "Free route" : "Usage billed"}</span>

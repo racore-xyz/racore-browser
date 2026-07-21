@@ -4,7 +4,7 @@ export type ProviderInfo = {
   id: string;
   name: string;
   kind: string;
-  default_model: string;
+  defaultModel: string;
   free: boolean;
   local: boolean;
   connected: boolean;
