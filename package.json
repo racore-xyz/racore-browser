@@ -2,6 +2,7 @@
   "name": "racore-browser",
   "version": "0.1.0",
   "private": true,
+  "main": "desktop/main.cjs",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -13,7 +14,13 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "racore": "node protocol/cli.mjs",
-    "protocol:test": "node --test tests/protocol.test.mjs"
+    "protocol:test": "node --test tests/protocol.test.mjs",
+    "daemon": ".venv\\Scripts\\python.exe -m racored.server",
+    "python:test": "set PYTHONPATH=python&& .venv\\Scripts\\python.exe -m pytest python\\tests -q",
+    "daemon:package": ".venv\\Scripts\\pyinstaller.exe --noconfirm --clean --distpath desktop/runtime/python --workpath work/pyinstaller/racored racored.spec && .venv\\Scripts\\pyinstaller.exe --noconfirm --clean --distpath desktop/runtime/python --workpath work/pyinstaller/cli racore-cli.spec",
+    "desktop": "electron .",
+    "desktop:dev": "concurrently -k -s first \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "desktop:package": "npm run build && npm run daemon:package && electron-builder --win nsis"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -37,7 +44,68 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.92.0",
+    "concurrently": "9.2.1",
+    "electron": "37.2.6",
+    "electron-builder": "26.0.12",
+    "wait-on": "8.0.4"
   },
-  "type": "module"
+  "type": "module",
+  "build": {
+    "appId": "xyz.racore.browser",
+    "productName": "Racore Browser",
+    "directories": {
+      "output": "desktop-dist"
+    },
+    "files": [
+      "desktop/**/*",
+      "!desktop/runtime/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "python",
+        "to": "python",
+        "filter": [
+          "**/*",
+          "!tests/**/*",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "dist",
+        "to": "ui",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "desktop/runtime/python",
+        "to": "racored",
+        "filter": [
+          "racored.exe",
+          "racore.exe"
+        ]
+      },
+      {
+        "from": "desktop/runtime/kubo",
+        "to": "kubo",
+        "filter": [
+          "ipfs.exe",
+          "LICENSE*",
+          "README*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "artifactName": "Racore-Browser-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
 }

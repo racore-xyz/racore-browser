@@ -42,3 +42,7 @@ next-env.d.ts
 /work/
 /.racore/
 **/.racore/
+.venv/
+python/.pytest_cache/
+python/**/__pycache__/
+desktop/runtime/

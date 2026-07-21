@@ -1,0 +1,10 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+httpx==0.28.1
+cryptography==45.0.6
+keyring==25.6.0
+python-multipart==0.0.20
+websockets==15.0.1
+pydantic==2.11.7
+pytest==8.4.1
+pytest-asyncio==1.1.0
