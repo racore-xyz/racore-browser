@@ -44,14 +44,23 @@ func (h *Hub) Broadcast(event map[string]any) {
 		return
 	}
 
+	var stale []*websocket.Conn
 	h.mu.RLock()
-	defer h.mu.RUnlock()
 	for conn := range h.clients {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			log.Printf("ws write: %v", err)
 			conn.Close()
+			stale = append(stale, conn)
+		}
+	}
+	h.mu.RUnlock()
+
+	if len(stale) > 0 {
+		h.mu.Lock()
+		for _, conn := range stale {
 			delete(h.clients, conn)
 		}
+		h.mu.Unlock()
 	}
 }
 

@@ -109,12 +109,12 @@ func (ps *PeerStore) FireLeft(p api.Peer) {
 	}
 }
 
-func (ps *PeerStore) PeersMap() map[string]*api.Peer {
+func (ps *PeerStore) PeersMap() map[string]api.Peer {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
-	out := make(map[string]*api.Peer, len(ps.peers))
+	out := make(map[string]api.Peer, len(ps.peers))
 	for k, v := range ps.peers {
-		out[k] = v
+		out[k] = *v
 	}
 	return out
 }

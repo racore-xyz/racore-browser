@@ -296,11 +296,12 @@ func (g *Gateway) geminiChat(ctx context.Context, p Provider, model string, mess
 	}
 
 	body := map[string]any{"contents": geminiContents}
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", p.BaseURL, model, key)
+	url := fmt.Sprintf("%s/models/%s:generateContent", p.BaseURL, model)
 
 	data, _ := json.Marshal(body)
 	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", key)
 
 	resp, err := g.httpClient.Do(req)
 	if err != nil {

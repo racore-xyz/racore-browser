@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -60,7 +61,11 @@ func (v *Vault) Set(provider, secret string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.secrets[provider] = secret
-	return v.save()
+	if err := v.save(); err != nil {
+		log.Printf("vault save after set %s: %v", provider, err)
+		return err
+	}
+	return nil
 }
 
 func (v *Vault) Get(provider string) (string, bool) {

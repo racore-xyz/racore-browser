@@ -16,6 +16,7 @@ type Manager struct {
 	repoPath   string
 	cmd        *exec.Cmd
 	execPath   string
+	client     *http.Client
 }
 
 func New(apiURL, gatewayURL, dataDir string) *Manager {
@@ -23,6 +24,7 @@ func New(apiURL, gatewayURL, dataDir string) *Manager {
 		apiURL:     apiURL,
 		gatewayURL: gatewayURL,
 		repoPath:   filepath.Join(dataDir, "ipfs"),
+		client:     &http.Client{Timeout: 1 * time.Second},
 	}
 }
 
@@ -43,8 +45,7 @@ func (m *Manager) isOnline(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	client := &http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := m.client.Do(req)
 	if err != nil {
 		return false
 	}

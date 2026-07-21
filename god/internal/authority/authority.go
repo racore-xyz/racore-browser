@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -128,7 +129,9 @@ func (a *Authority) Create(domain string) (*DomainInfo, []map[string]string, err
 	pemPath := filepath.Join(a.dataDir, fmt.Sprintf("authority-%s.pem", domain))
 	b, _ := x509.MarshalPKCS8PrivateKey(priv)
 	block := &pem.Block{Type: "PRIVATE KEY", Bytes: b}
-	os.WriteFile(pemPath, pem.EncodeToMemory(block), 0600)
+	if err := os.WriteFile(pemPath, pem.EncodeToMemory(block), 0600); err != nil {
+		log.Printf("authority: write pem %s: %v", pemPath, err)
+	}
 
 	info := &DomainInfo{
 		Domain:     domain,
@@ -138,7 +141,9 @@ func (a *Authority) Create(domain string) (*DomainInfo, []map[string]string, err
 		Releases:   make([]ReleaseEntry, 0),
 	}
 	a.domains[domain] = info
-	a.save()
+	if err := a.save(); err != nil {
+		log.Printf("authority: save after create %s: %v", domain, err)
+	}
 
 	dns := []map[string]string{
 		{"type": "TXT", "name": "_racore-key." + domain, "value": controller},
@@ -175,7 +180,9 @@ func (a *Authority) ObserveClaim(domain, controller, nodeID string) {
 			Domain: domain, Controller: controller,
 			NodeID: nodeID, Timestamp: time.Now().UnixMilli(),
 		}
-		a.save()
+		if err := a.save(); err != nil {
+			log.Printf("authority: save after observe %s: %v", domain, err)
+		}
 	}
 }
 
@@ -214,7 +221,10 @@ func (a *Authority) PublishRelease(domain string, manifest api.ReleaseManifest) 
 
 	entry := ReleaseEntry{Manifest: manifest, ReleaseID: releaseID}
 	info.Releases = append(info.Releases, entry)
-	a.save()
+	if err := a.save(); err != nil {
+		log.Printf("authority: save after release %s: %v", domain, err)
+		return nil, err
+	}
 
 	return &manifest, nil
 }
@@ -247,7 +257,10 @@ func (a *Authority) Delegate(domain, publicKey string, capabilities []string, ex
 		CreatedAt:    time.Now().UnixMilli(),
 	}
 	info.Delegates = append(info.Delegates, grant)
-	a.save()
+	if err := a.save(); err != nil {
+		log.Printf("authority: save after delegate %s: %v", domain, err)
+		return nil, err
+	}
 
 	return &grant, nil
 }

@@ -31,7 +31,7 @@ func NewUDPTransport(group string, port int) (*UDPTransport, error) {
 	addr := net.JoinHostPort(group, fmt.Sprintf("%d", port))
 	gaddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve group %s: %w", addr, err)
 	}
 	return &UDPTransport{
 		group: gaddr,
@@ -54,20 +54,20 @@ func (t *UDPTransport) Start() error {
 	addr := &net.UDPAddr{Port: t.group.Port}
 	conn, err := net.ListenUDP("udp4", addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("listen udp %d: %w", t.group.Port, err)
 	}
 	t.conn = conn
 
 	file, err := conn.File()
 	if err != nil {
 		conn.Close()
-		return err
+		return fmt.Errorf("conn file: %w", err)
 	}
 	defer file.Close()
 
 	if err := syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); err != nil {
 		conn.Close()
-		return err
+		return fmt.Errorf("setsockopt reuseaddr: %w", err)
 	}
 
 	pc := ipv4.NewPacketConn(conn)
@@ -76,19 +76,19 @@ func (t *UDPTransport) Start() error {
 	if err := pc.JoinGroup(nil, &net.UDPAddr{IP: t.group.IP}); err != nil {
 		pc.Close()
 		conn.Close()
-		return err
+		return fmt.Errorf("join group %s: %w", t.group.IP, err)
 	}
 
 	if err := pc.SetMulticastTTL(2); err != nil {
 		pc.Close()
 		conn.Close()
-		return err
+		return fmt.Errorf("set multicast ttl: %w", err)
 	}
 
 	if err := pc.SetControlMessage(ipv4.FlagTTL|ipv4.FlagDst, true); err != nil {
 		pc.Close()
 		conn.Close()
-		return err
+		return fmt.Errorf("set control message: %w", err)
 	}
 
 	t.started.Store(true)
@@ -111,7 +111,19 @@ func (t *UDPTransport) readLoop(ctx context.Context, recvChan chan<- Message) {
 		}
 		bufPtr := t.readBuf.Get().(*[]byte)
 		buf := *bufPtr
-		n, _, addr, err := t.pc.ReadFrom(buf)
+		t.mu.Lock()
+		pc := t.pc
+		t.mu.Unlock()
+		if pc == nil {
+			t.readBuf.Put(bufPtr)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+			continue
+		}
+		n, _, addr, err := pc.ReadFrom(buf)
 		if err != nil || n == 0 || addr == nil {
 			t.readBuf.Put(bufPtr)
 			if t.closed.Load() {
@@ -141,23 +153,34 @@ func (t *UDPTransport) readLoop(ctx context.Context, recvChan chan<- Message) {
 }
 
 func (t *UDPTransport) SendTo(data []byte, addr *net.UDPAddr) error {
-	if t.closed.Load() || t.conn == nil {
+	t.mu.Lock()
+	conn := t.conn
+	t.mu.Unlock()
+	if t.closed.Load() || conn == nil {
 		return net.ErrClosed
 	}
-	_, err := t.conn.WriteTo(data, addr)
-	return err
+	_, err := conn.WriteTo(data, addr)
+	if err != nil {
+		return fmt.Errorf("sendto %s: %w", addr, err)
+	}
+	return nil
 }
 
 func (t *UDPTransport) Broadcast(data []byte) error {
-	if t.closed.Load() || t.pc == nil {
+	t.mu.Lock()
+	pc := t.pc
+	t.mu.Unlock()
+	if t.closed.Load() || pc == nil {
 		return net.ErrClosed
 	}
-	_, err := t.pc.WriteTo(data, nil, t.group)
+	_, err := pc.WriteTo(data, nil, t.group)
 	return err
 }
 
 func (t *UDPTransport) Close() error {
 	t.closed.Store(true)
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if t.conn != nil {
 		if raw, err := t.conn.SyscallConn(); err == nil {
 			raw.Control(func(fd uintptr) {
@@ -165,11 +188,14 @@ func (t *UDPTransport) Close() error {
 			})
 		}
 	}
+	var err error
 	if t.pc != nil {
-		return t.pc.Close()
+		err = t.pc.Close()
+		t.pc = nil
 	}
 	if t.conn != nil {
-		return t.conn.Close()
+		t.conn.Close()
+		t.conn = nil
 	}
-	return nil
+	return err
 }

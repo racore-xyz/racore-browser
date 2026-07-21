@@ -27,6 +27,7 @@ type Server struct {
 	mesh    *mesh.MeshNode
 	hub     *Hub
 	version string
+	httpSrv *http.Server
 }
 
 func New(cfg api.Config) *Server {
@@ -107,7 +108,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/events", s.wsHandler)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
-	httpSrv := &http.Server{
+	s.httpSrv = &http.Server{
 		Addr:         addr,
 		Handler:     corsMiddleware(mux),
 		ReadTimeout: 10 * time.Second,
@@ -118,7 +119,7 @@ func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("racored listening on %s", addr)
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
 	}()
@@ -134,6 +135,11 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Stop() {
 	s.mesh.Stop()
 	s.kubo.Stop()
+	if s.httpSrv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		s.httpSrv.Shutdown(ctx)
+	}
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
