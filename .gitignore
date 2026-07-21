@@ -39,6 +39,10 @@ next-env.d.ts
 /dist/
 /.wrangler/
 /outputs/
+/output/
+/tmp/
+/desktop-dist/
+/tsconfig.tsbuildinfo
 /work/
 /.racore/
 **/.racore/
