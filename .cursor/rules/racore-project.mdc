@@ -1,5 +1,5 @@
 ---
-description: Racore Browser project context -- Go daemon + Next.js frontend + Electron desktop
+description: Racore Browser project context -- Go daemon + React frontend + Tauri v2 desktop
 globs: ["*", "**/*"]
 ---
 
@@ -10,7 +10,7 @@ globs: ["*", "**/*"]
 Three-tier desktop app:
 - **Frontend**: `app/` -- Next.js 16 / Vinext / React / TypeScript / Tailwind
 - **Backend**: `god/` -- Go daemon (`racored`), REST API on `127.0.0.1:47831`
-- **Desktop**: `desktop/main.cjs` -- Electron 37 shell
+- **Desktop**: `src-tauri/` -- Tauri v2 Rust shell
 
 API client: `app/lib/racore-client.ts` `daemonRequest()` (single entry point for all frontend-to-daemon calls)
 
@@ -23,7 +23,7 @@ Read these files for context before making changes:
 | Architecture | `.llms/01-architecture.md` |
 | Frontend | `.llms/02-frontend.md` |
 | Go backend | `.llms/03-backend.md` |
-| Electron desktop | `.llms/04-desktop.md` |
+| Tauri desktop | `.llms/04-desktop.md` |
 | API reference | `.llms/05-api-reference.md` |
 | Data flow | `.llms/06-data-flow.md` |
 | Types | `.llms/07-types.md` |

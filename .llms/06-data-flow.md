@@ -15,14 +15,13 @@ AgenticBrowserView.tsx
        |
        v
 racore-client.ts
-  - Desktop path: window.racoreDesktop.api({ path, method, body })
+  - Desktop path: desktopBridge.api({ path, method, body })
   - Browser path: fetch("http://127.0.0.1:47831/v1/chat", { method, body })
        |
        v
-desktop/main.cjs (if desktop)
-  - ipcMain.handle("racore:api")
-  - Validates path starts with "/" and method is GET|POST|PUT|DELETE
-  - Forwards: fetch("http://127.0.0.1:47831/v1/chat", ...)
+Tauri Rust daemon_request command (if desktop)
+  - Validates the method/path against the Racore API allowlist
+  - Forwards to the fixed loopback daemon origin
        |
        v
 server.go (racored, port 47831)

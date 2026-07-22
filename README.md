@@ -1,182 +1,79 @@
 # Racore Browser
 
-Agentic browser & open web protocol.
-
-Browse with AI agents. Publish verifiable, portable websites on IPFS. Own your identity and data with self-sovereign domain authority and peer-to-peer mesh networking.
+Racore is a local-first agentic browser and open-web protocol application. The desktop product uses React in a Tauri v2 webview, a Rust shell, and the existing Go `racored` daemon.
 
 ## Architecture
 
+```text
+Tauri v2 desktop
+  React static UI (dist-desktop)
+       │ typed invoke/events
+       ▼
+  Rust commands and managed process state
+       │ fixed-origin HTTP
+       ▼
+racored Go daemon (127.0.0.1:47831)
+  providers · encrypted vault · authority · IPFS/Kubo · Racore mesh
 ```
-┌──────────────────────────────────────────────┐
-│  Electron Desktop (optional)                  │
-│  ┌────────────────────────────────────────┐   │
-│  │  Frontend (Next.js / Vinext / React)   │   │
-│  │  app/lib/racore-client.ts  ──── HTTP ───┼───┤
-│  └────────────────────────────────────────┘   │
-│                       │ IPC bridge (packaged)  │
-└───────────────────────┼──────────────────────┘
-                        │
-┌───────────────────────▼──────────────────────┐
-│  racored (Go daemon)  127.0.0.1:47831         │
-│                                               │
-│  ┌─────────┐ ┌──────────┐ ┌──────────────┐   │
-│  │ Vault   │ │ Gateway  │ │ Mesh Network │   │
-│  │ (AES)   │ │(AI APIs) │ │ (libp2p/mcast)│   │
-│  ├─────────┤ ├──────────┤ ├──────────────┤   │
-│  │ IPFS    │ │ Kubo     │ │ Authority    │   │
-│  │ Bridge  │ │ Manager  │ │ (Domains)    │   │
-│  └─────────┘ └──────────┘ └──────────────┘   │
-└──────────────────────────────────────────────┘
-```
+
+The hosted React application keeps its Vinext/Cloudflare build. Both modes share the components and `daemonRequest(path, { method, body })` schema:
+
+- Hosted mode fetches the loopback daemon directly.
+- Desktop mode uses `app/lib/desktop.ts` and typed Rust commands.
 
 ## Prerequisites
 
-- **Node.js** `>=22.13.0`
-- **Go** `>=1.21`
+- Node.js 22.13 or newer
+- Rust 1.77.2 or newer with platform Tauri prerequisites
+- Go 1.21 or newer
+- A platform-matching Kubo executable
 
-## Quick Start
+On Windows, place Kubo at `desktop/runtime/kubo/ipfs.exe` or set `RACORE_KUBO_BINARY`. Set `RACORE_GO` when `go` is not on `PATH`.
 
-```bash
-# Install frontend dependencies
+## Development
+
+```powershell
 npm install
 
-# Build the Go daemon
-cd god && go build -o build/racored ./cmd/racored/ && cd ..
-
-# Start the daemon
-./god/build/racored &
-
-# Start the frontend (dev mode)
+# Hosted React development
 npm run dev
+
+# Native desktop development (builds Go sidecars first)
+npm run desktop:dev
 ```
 
-Open http://localhost:3000 in your browser.
+The Tauri command starts or reuses `racored` on `127.0.0.1:47831`. A daemon started outside the app is never terminated by the app.
 
-## Project Structure
+## Build and test
 
-```
-racore-browser/
-├── app/                    # Next.js frontend (React)
-│   ├── components/         # UI components
-│   ├── lib/
-│   │   └── racore-client.ts   # API client for Go daemon
-│   └── page.tsx            # Home page
-├── desktop/                # Electron shell
-│   ├── main.cjs            # Electron main process
-│   └── preload.cjs         # Context bridge
-├── god/                    # Go backend (daemon + CLI)
-│   ├── build/              # Compiled binaries
-│   ├── cmd/
-│   │   ├── racored/        # Daemon entrypoint
-│   │   └── racore/         # CLI tool entrypoint
-│   ├── internal/
-│   │   ├── server/         # HTTP server + REST API
-│   │   ├── vault/          # Encrypted key storage (AES-GCM)
-│   │   ├── providers/      # AI provider catalog
-│   │   ├── gateway/        # AI API routing
-│   │   ├── mesh/           # P2P multicast mesh
-│   │   ├── transport/      # UDP multicast transport
-│   │   ├── ipfs/           # IPFS content bridge
-│   │   ├── kubo/           # Embedded Kubo manager
-│   │   ├── authority/      # Domain identity + delegation
-│   │   ├── identity/       # DID key generation
-│   │   ├── peer/           # Peer store
-│   │   ├── protocol/       # Protocol message signing
-│   │   └── config/         # Configuration loader
-│   └── pkg/api/            # Shared API types
-├── dist/                   # Frontend build output
-├── worker/                 # Cloudflare Worker
-├── tests/                  # Protocol tests
-├── package.json
-└── vite.config.ts
-```
+```powershell
+npm test
+npm run lint
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
-## Go Backend (god/)
-
-The `god/` directory contains a complete rewrite of the original Python backend in Go.
-
-### Building
-
-```bash
-# Build for current platform
-cd god && go build -o build/racored ./cmd/racored/
-go build -o build/racore ./cmd/racore/
-
-# Cross-compile all targets
-./scripts/build.sh
-```
-
-### Running
-
-```bash
-# Start the daemon
-RACORE_DATA_DIR=/path/to/data ./god/build/racored
-
-# Use the CLI
-./god/build/racore --help
-```
-
-### Testing
-
-```bash
 cd god
 go test -race -count=1 ./internal/...
-go vet ./...
-```
+cd ..
 
-### API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | System health, version, status |
-| GET | `/v1/providers` | List AI providers |
-| PUT | `/v1/providers/{id}/connect` | Store API key for provider |
-| DELETE | `/v1/providers/{id}` | Remove provider connection |
-| GET | `/v1/providers/{id}/health` | Check provider health |
-| POST | `/v1/chat` | Send chat completion request |
-| GET | `/v1/ipfs/status` | IPFS node status |
-| POST | `/v1/ipfs/add` | Upload file to IPFS |
-| POST | `/v1/ipfs/pin/{cid}` | Pin a CID |
-| GET | `/v1/mesh/status` | Mesh node status |
-| GET | `/v1/mesh/peers` | Mesh peer list |
-| POST | `/v1/mesh/broadcast` | Broadcast message over mesh |
-| GET | `/v1/authority/domains` | List claimed domains |
-| POST | `/v1/authority/domains` | Claim a domain |
-| GET | `/v1/authority/domains/{domain}/available` | Check domain availability |
-| GET | `/v1/authority/domains/{domain}/releases` | List domain releases |
-| POST | `/v1/authority/domains/{domain}/releases` | Publish release |
-| POST | `/v1/authority/domains/{domain}/delegate` | Create delegation |
-| WS | `/v1/events` | Real-time event stream |
-
-### AI Providers
-
-9 built-in providers: OpenAI, Anthropic, Google Gemini, OpenRouter, Kimi/Moonshot, Ollama (local), OpenCode (local), Claude Code (local), Kimi Code (local).
-
-## Desktop App
-
-```bash
-# Development mode (frontend + Electron)
-npm run desktop:dev
-
-# Package for distribution
 npm run desktop:package
+npm run tauri:verify
 ```
 
-The Electron app (`desktop/main.cjs`) starts `god/build/racored` as a child process, waits for it to become ready on port 47831, then loads the frontend UI.
+The desktop package is written below `src-tauri/target/release/bundle/`. Tauri bundles architecture-suffixed `racored` and `racore` sidecars plus Kubo; it does not bundle a Node.js runtime or native Node modules.
 
-## Commands
+## Project structure
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start frontend dev server |
-| `npm run build` | Build frontend for production |
-| `npm start` | Start production frontend server |
-| `npm run desktop` | Launch Electron app |
-| `npm run desktop:dev` | Dev mode with live reload |
-| `npm run desktop:package` | Package Electron distributable |
-| `npm test` | Build + run protocol tests |
-| `cd god && go test ./internal/...` | Run Go backend tests |
+```text
+app/                    React UI and typed desktop/daemon clients
+desktop-ui/             Static Vite entry for Tauri
+src-tauri/              Rust backend, capabilities, config, icons
+scripts/                Sidecar preparation and bundle verification
+god/                    Go daemon and CLI
+protocol/               RCP protocol JavaScript tools
+worker/                 Cloudflare Worker entry
+tests/                  JavaScript/TypeScript contract tests
+docs/                   Architecture and migration documentation
+```
 
-## License
-
-Proprietary.
+See [Tauri desktop development](docs/tauri-development.md), [architecture](docs/architecture.md), and [the migration audit](docs/tauri-migration-audit.md).

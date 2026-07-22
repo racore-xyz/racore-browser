@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import Home from "../app/page";
+import { RacoreProductApp } from "../app/components/RacoreProductApp";
 import "../app/globals.css";
 import { installLegacyDesktopBridge } from "../app/lib/desktop";
 
@@ -15,6 +15,6 @@ installLegacyDesktopBridge();
 
 createRoot(root).render(
   <StrictMode>
-    <Home />
+    <RacoreProductApp />
   </StrictMode>,
 );

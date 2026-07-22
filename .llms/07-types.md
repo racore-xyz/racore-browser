@@ -162,30 +162,26 @@ type PeerInfo struct {
 
 ---
 
-## TypeScript Types (`app/types/desktop.d.ts`)
+## TypeScript desktop types (`app/lib/desktop.ts`)
 
-### Desktop Bridge
+### Desktop bridge
 
 ```typescript
-interface Window {
-  racoreDesktop?: {
-    isDesktop: boolean;
-    daemonUrl: string;
-    status(): Promise<Record<string, unknown>>;
-    api(request: {
-      path: string;
-      method?: string;
-      body?: unknown;
-    }): Promise<{ ok: boolean; status: number; data: unknown }>;
-    platform(): Promise<{
-      platform: string;
-      version: string;
-      packaged: boolean;
-    }>;
-    openBrowser(url: string): Promise<boolean>;
-    openExternal(url: string): Promise<void>;
-    onDaemonExit(callback: (code: number) => void): void;
-  };
+type DaemonApiRequest = {
+  path: string;
+  method?: string;
+  body?: unknown;
+};
+
+type DaemonApiResponse = {
+  ok: boolean;
+  status: number;
+  data: unknown;
+};
+
+type DaemonExitPayload = {
+  code: number | null;
+  success: boolean;
 }
 ```
 

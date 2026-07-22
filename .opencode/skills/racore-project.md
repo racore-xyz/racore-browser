@@ -1,6 +1,6 @@
 ---
 name: racore-project
-description: Full project context for Racore Browser -- a three-tier desktop app (Go daemon + Next.js frontend + Electron shell). Guides agents to the right code paths and documentation.
+description: Full project context for Racore Browser -- a three-tier desktop app (Go daemon + React frontend + Tauri v2 Rust shell). Guides agents to the right code paths and documentation.
 ---
 
 # Racore Browser Project
@@ -13,9 +13,9 @@ Three-tier desktop application:
 |-------|------|-------------|
 | Frontend | Next.js 16 / Vinext / React / TypeScript / Tailwind | `app/` |
 | Backend | Go daemon (`racored`) | `god/` |
-| Desktop | Electron 37 | `desktop/main.cjs` |
+| Desktop | Tauri v2 / Rust | `src-tauri/` |
 
-The Go daemon serves a REST API on `127.0.0.1:47831`. The frontend communicates with it via `app/lib/racore-client.ts` (direct HTTP or Electron IPC bridge).
+The Go daemon serves a REST API on `127.0.0.1:47831`. The frontend communicates with it via `app/lib/racore-client.ts` (direct HTTP or typed Tauri commands).
 
 ## Documentation Files
 
@@ -26,7 +26,7 @@ Consult these before modifying any part of the project:
 | System architecture and component relationships | `.llms/01-architecture.md` |
 | Frontend component tree, API client, types | `.llms/02-frontend.md` |
 | Go backend packages, module structure, env vars | `.llms/03-backend.md` |
-| Electron shell, IPC handlers, packaging | `.llms/04-desktop.md` |
+| Tauri commands, lifecycle, capabilities, packaging | `.llms/04-desktop.md` |
 | Complete REST API with request/response examples | `.llms/05-api-reference.md` |
 | Data flow for chat, mesh, domains, IPFS, errors | `.llms/06-data-flow.md` |
 | All shared Go and TypeScript types | `.llms/07-types.md` |
@@ -67,4 +67,4 @@ npm test
 3. Before changing an error response: Verify the key is `"detail"` (not `"error"`)
 4. Before modifying CORS: Add the new origin to `corsMiddleware()` in `server.go`
 5. Before editing transport code: Ensure `Close()` still unblocks pending reads via shutdown
-6. Before changing the Electron startup: Test both `npm run desktop` and `npm run desktop:dev`
+6. Before changing Tauri startup: Test `npm run desktop:dev` and `npm run desktop:package`

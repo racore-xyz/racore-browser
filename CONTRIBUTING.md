@@ -149,7 +149,7 @@ npm test
 ### Frontend
 
 - All daemon communication goes through `app/lib/racore-client.ts`
-- Two transport modes: direct HTTP (browser) and Electron IPC (desktop)
+- Two transport modes: direct HTTP (hosted browser) and typed Tauri commands (desktop)
 - No state management library: component-local state + props
 - Tailwind CSS for styling, no CSS modules or styled components
 

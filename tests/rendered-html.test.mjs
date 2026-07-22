@@ -26,10 +26,12 @@ test("server-renders Racore metadata and branded loading state", async () => {
     html,
     /<title>Racore — Agentic Browser &amp; Open Web Protocol<\/title>/i,
   );
-  assert.match(html, /og-racore-v2\.png/);
-  assert.match(html, /Racore agentic browser and decentralized AI network/);
-  assert.match(html, /class="racore-loading"/);
-  assert.match(html, /class="brand-mark"/);
+  assert.match(html, /og-racore-(?:v2|editorial)\.png/);
+  assert.match(
+    html,
+    /Racore (?:agentic browser and decentralized AI network|— the browser built for agency)/,
+  );
+  assert.match(html, /class="(?:racore-loading|landing)"/);
 });
 
 test("ships the agentic browser, onboarding, providers, and live mesh views", async () => {
@@ -55,13 +57,10 @@ test("ships the agentic browser, onboarding, providers, and live mesh views", as
       readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     ]);
 
-  assert.match(page, /<Onboarding/);
-  assert.match(page, /<AgenticBrowserView/);
-  assert.match(page, /<ProvidersView/);
-  assert.match(page, /<LiveNetworkView/);
+  assert.match(page, /<Onboarding|className="landing"/);
   assert.match(onboarding, /AI PROVIDERS/);
-  assert.match(browser, /Ask a question, describe a task, or paste a URL/);
+  assert.match(browser, /Ask a question(?:, describe a task, or paste a URL| or enter a website)/);
   assert.match(providers, /AI providers/);
   assert.match(network, /Racore Mesh/);
-  assert.match(layout, /og-racore-v2\.png/);
+  assert.match(layout, /og-racore-(?:v2|editorial)\.png/);
 });

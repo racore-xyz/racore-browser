@@ -17,7 +17,7 @@ Allowed origins:
 - `http://localhost:3000` (Vite dev server)
 - `http://127.0.0.1:3000`
 - `http://[::1]:3000`
-- `http://127.0.0.1:47832` (Electron UI server)
+- Tauri desktop requests are proxied by Rust from trusted local application content.
 - `https://racore.xyz`
 
 Preflight requests (`OPTIONS`) respond with HTTP 204.

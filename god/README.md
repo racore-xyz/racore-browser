@@ -75,7 +75,7 @@ go build -o build/racore ./cmd/racore/
 | `RACORE_PORT` | `47831` | HTTP API port |
 | `RACORE_NODE_NAME` | `Racore Desktop` | Mesh node name |
 | `RACORE_MESH_PORT` | `47777` | Mesh UDP port |
-| `RACORE_USE_GOD` | - | Force Go daemon in Electron |
+| `RACORE_USE_GOD` | - | Legacy compatibility flag; the Tauri package always bundles the Go daemon |
 
 ## Migrating from Python
 

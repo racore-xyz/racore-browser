@@ -29,13 +29,13 @@ test("main capability grants no filesystem, OS, or shell plugin access", async (
   assert.doesNotMatch(permissions, /(?:fs|os|shell|opener):/);
 });
 
-test("desktop Vite entry reuses the React application", async () => {
+test("desktop Vite entry reuses the React product workspace", async () => {
   const [entry, viteConfig] = await Promise.all([
     readFile(new URL("../desktop-ui/main.tsx", import.meta.url), "utf8"),
     readFile(new URL("../desktop-ui/vite.config.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(entry, /import Home from "\.\.\/app\/page"/);
+  assert.match(entry, /RacoreProductApp/);
   assert.match(viteConfig, /"next\/image"/);
   assert.match(viteConfig, /dist-desktop/);
 });
