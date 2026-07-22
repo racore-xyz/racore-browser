@@ -18,19 +18,19 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol =
     requestHeaders.get("x-forwarded-proto") ||
     (host.startsWith("localhost") ? "http" : "https");
-  const image = `${protocol}://${host}/og-racore-v2.png`;
+  const image = `${protocol}://${host}/og-racore-editorial.png`;
   return {
     title: "Racore — Agentic Browser & Open Web Protocol",
-    description: "Browse with agents. Publish verifiable, portable websites.",
+    description: "Browse with agents. Publish verifiable, portable websites. Keep control with Racore's local-first agentic browser and open web protocol.",
     openGraph: {
       title: "Racore.xyz",
       description: "Browse with agents. Publish without lock-in.",
       images: [
         {
           url: image,
-          width: 1733,
+          width: 1731,
           height: 909,
-          alt: "Racore agentic browser and decentralized AI network",
+          alt: "Racore — the browser built for agency",
         },
       ],
     },
