@@ -50,4 +50,6 @@ next-env.d.ts
 python/.pytest_cache/
 python/**/__pycache__/
 desktop/runtime/
-package-lock.json
+/dist-desktop/
+/src-tauri/target/
+/src-tauri/gen/
