@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="104" viewBox="0 0 1200 104" role="img" aria-labelledby="title desc">
+  <title id="title">Racore signal</title>
+  <desc id="desc">Animated line connecting local-first, agentic, and verifiable product principles.</desc>
+  <defs>
+    <linearGradient id="signal" x1="0" x2="1">
+      <stop offset="0" stop-color="#152019"/>
+      <stop offset="0.42" stop-color="#bfff2e"/>
+      <stop offset="0.58" stop-color="#39d780"/>
+      <stop offset="1" stop-color="#152019"/>
+      <animate attributeName="x1" values="-1;1" dur="4.8s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="0;2" dur="4.8s" repeatCount="indefinite"/>
+    </linearGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="104" rx="18" fill="#090d0b"/>
+  <path d="M110 52H1090" stroke="#1b2a20" stroke-width="2"/>
+  <path d="M110 52H1090" stroke="url(#signal)" stroke-width="2" stroke-dasharray="10 14">
+    <animate attributeName="stroke-dashoffset" values="0;-96" dur="4s" repeatCount="indefinite"/>
+  </path>
+  <g fill="#c7ff31" filter="url(#glow)">
+    <circle cx="110" cy="52" r="5"><animate attributeName="r" values="4;7;4" dur="2.4s" repeatCount="indefinite"/></circle>
+    <circle cx="600" cy="52" r="5"><animate attributeName="r" values="4;7;4" dur="2.4s" begin=".8s" repeatCount="indefinite"/></circle>
+    <circle cx="1090" cy="52" r="5"><animate attributeName="r" values="4;7;4" dur="2.4s" begin="1.6s" repeatCount="indefinite"/></circle>
+  </g>
+  <g fill="#edf4eb" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" letter-spacing="3">
+    <text x="110" y="34" text-anchor="middle">LOCAL-FIRST</text>
+    <text x="600" y="34" text-anchor="middle">AGENTIC</text>
+    <text x="1090" y="34" text-anchor="middle">VERIFIABLE</text>
+  </g>
+  <g fill="#667268" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" letter-spacing="2">
+    <text x="110" y="79" text-anchor="middle">YOUR DEVICE</text>
+    <text x="600" y="79" text-anchor="middle">YOUR INTENT</text>
+    <text x="1090" y="79" text-anchor="middle">YOUR PROOF</text>
+  </g>
+</svg>
