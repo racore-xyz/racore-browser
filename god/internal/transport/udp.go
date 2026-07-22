@@ -6,7 +6,6 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"golang.org/x/net/ipv4"
@@ -65,7 +64,7 @@ func (t *UDPTransport) Start() error {
 	}
 	defer file.Close()
 
-	if err := syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); err != nil {
+	if err := setReuseAddress(file.Fd()); err != nil {
 		conn.Close()
 		return fmt.Errorf("setsockopt reuseaddr: %w", err)
 	}
@@ -184,7 +183,7 @@ func (t *UDPTransport) Close() error {
 	if t.conn != nil {
 		if raw, err := t.conn.SyscallConn(); err == nil {
 			raw.Control(func(fd uintptr) {
-				syscall.Shutdown(int(fd), syscall.SHUT_RD)
+				shutdownRead(fd)
 			})
 		}
 	}

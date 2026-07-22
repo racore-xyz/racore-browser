@@ -69,7 +69,7 @@ The compatibility adapter must continue accepting the existing method/path/body 
 - `POST /v1/mesh/broadcast`
 - `GET /v1/ipfs/status`
 - `GET /v1/authority/domains`
-- `GET /v1/authority/domains/{domain}/availability`
+- `GET /v1/authority/domains/{domain}/available`
 - `POST /v1/authority/domains`
 
 The Rust proxy must reject traversal, fragments, absolute URLs, credentials, and methods outside `GET`, `POST`, `PUT`, and `DELETE`. It must always target the fixed loopback daemon origin and preserve non-2xx response bodies in the existing response envelope.

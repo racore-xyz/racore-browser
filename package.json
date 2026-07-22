@@ -20,6 +20,7 @@
     "desktop:package": "npm run build && electron-builder --win nsis",
     "desktop:ui": "vite build --config desktop-ui/vite.config.ts",
     "desktop:ui:dev": "vite --config desktop-ui/vite.config.ts",
+    "tauri:prepare": "node scripts/prepare-tauri-sidecars.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
