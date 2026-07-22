@@ -1,3 +1,5 @@
+import { desktopBridge, isDesktopApp } from "./desktop";
+
 const LOCAL_DAEMON = "http://127.0.0.1:47831";
 
 export type ProviderInfo = {
@@ -15,8 +17,8 @@ export async function daemonRequest<T>(
   path: string,
   options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  if (typeof window !== "undefined" && window.racoreDesktop?.api) {
-    const result = await window.racoreDesktop.api({
+  if (isDesktopApp()) {
+    const result = await desktopBridge.api({
       path,
       method: options.method,
       body: options.body,

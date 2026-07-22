@@ -7,6 +7,7 @@ import {
   listProviders,
   ProviderInfo,
 } from "../lib/racore-client";
+import { desktopBridge, isDesktopApp } from "../lib/desktop";
 
 type Result = {
   text: string;
@@ -62,7 +63,7 @@ export function AgenticBrowserView() {
     const input = query.trim();
     if (!input) return;
     if (isUrl) {
-      if (window.racoreDesktop) await window.racoreDesktop.openBrowser(input);
+      if (isDesktopApp()) await desktopBridge.openBrowser(input);
       else
         window.open(
           /^https?:/.test(input) ? input : `https://${input}`,
