@@ -14,7 +14,12 @@ Complete rewrite of the Racore Python daemon in Go. Single static binary, no run
 ```
 racored (single binary)
   ├── HTTP API :47831 (REST + WebSocket)
-  ├── P2P Mesh :47777 (UDP multicast, Ed25519 signed)
+  ├── P2P Mesh :47777 (UDP multicast + unicast, Ed25519 signed envelopes)
+  │   ├── Presence heartbeat & peer discovery
+  │   ├── Bootstrap peers for cross-LAN connectivity
+  │   ├── Ping/pong latency measurement
+  │   ├── Graceful leave (goodbye messages)
+  │   └── Unicast direct messaging (SendTo)
   ├── Kubo IPFS manager (subprocess)
   └── AI provider gateway (OpenAI, Anthropic, Gemini, Ollama, etc.)
 ```
@@ -73,9 +78,14 @@ go build -o build/racore ./cmd/racore/
 |----------|---------|-------------|
 | `RACORE_DATA_DIR` | `~/.local/share/racore` | Data directory |
 | `RACORE_PORT` | `47831` | HTTP API port |
-| `RACORE_NODE_NAME` | `Racore Desktop` | Mesh node name |
+| `RACORE_NODE_NAME` | `Racore Desktop` | Mesh node name visible to peers |
 | `RACORE_MESH_PORT` | `47777` | Mesh UDP port |
+| `RACORE_MESH_GROUP` | `239.255.77.77` | Multicast group address |
+| `RACORE_MESH_HEARTBEAT_SEC` | `5` | Heartbeat interval in seconds |
+| `RACORE_BOOTSTRAP_PEERS` | - | Comma-separated `host:port` list for cross-LAN discovery |
 | `RACORE_USE_GOD` | - | Legacy compatibility flag; the Tauri package always bundles the Go daemon |
+
+> Mesh is configured via `settings.json` in the data directory. Environment variables override file values.
 
 ## Migrating from Python
 

@@ -115,3 +115,55 @@ func TestOnLeft(t *testing.T) {
 		t.Fatalf("expected 1 left event, got %d", leftCount)
 	}
 }
+
+func TestUpdateLatency(t *testing.T) {
+	ps := NewPeerStore()
+	ps.AddOrUpdate(api.Peer{NodeID: "abc", Name: "Test", LastSeen: 1000})
+
+	ps.UpdateLatency("abc", 42)
+	got, ok := ps.Get("abc")
+	if !ok {
+		t.Fatal("peer not found")
+	}
+	if got.LatencyMs != 42 {
+		t.Fatalf("expected latency 42, got %d", got.LatencyMs)
+	}
+
+	ps.UpdateLatency("nonexistent", 99)
+}
+
+func TestRemove(t *testing.T) {
+	ps := NewPeerStore()
+	ps.AddOrUpdate(api.Peer{NodeID: "a", LastSeen: 1})
+	ps.AddOrUpdate(api.Peer{NodeID: "b", LastSeen: 2})
+
+	if ps.Count() != 2 {
+		t.Fatalf("expected 2, got %d", ps.Count())
+	}
+
+	ps.Remove("a")
+	if ps.Count() != 1 {
+		t.Fatalf("expected 1, got %d", ps.Count())
+	}
+
+	_, ok := ps.Get("a")
+	if ok {
+		t.Fatal("expected peer a to be removed")
+	}
+
+	ps.Remove("nonexistent")
+}
+
+func TestAddOrUpdateLatencyField(t *testing.T) {
+	ps := NewPeerStore()
+	ps.AddOrUpdate(api.Peer{NodeID: "x", Name: "First", LastSeen: 1000})
+	ps.UpdateLatency("x", 25)
+
+	updated := api.Peer{NodeID: "x", Name: "Updated", LastSeen: 2000, LatencyMs: 50}
+	ps.AddOrUpdate(updated)
+
+	got, _ := ps.Get("x")
+	if got.LatencyMs != 50 {
+		t.Fatalf("expected latency 50 after update, got %d", got.LatencyMs)
+	}
+}

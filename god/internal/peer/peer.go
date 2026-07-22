@@ -44,11 +44,27 @@ func (ps *PeerStore) AddOrUpdate(p api.Peer) bool {
 		existing.PublicKey = p.PublicKey
 		existing.Roles = p.Roles
 		existing.LastSeen = p.LastSeen
+		existing.LatencyMs = p.LatencyMs
 	} else {
 		cp := p
 		ps.peers[p.NodeID] = &cp
 	}
 	return !exists
+}
+
+func (ps *PeerStore) UpdateLatency(nodeID string, latencyMs int) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	existing, exists := ps.peers[nodeID]
+	if exists {
+		existing.LatencyMs = latencyMs
+	}
+}
+
+func (ps *PeerStore) Remove(nodeID string) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	delete(ps.peers, nodeID)
 }
 
 func (ps *PeerStore) Get(nodeID string) (api.Peer, bool) {

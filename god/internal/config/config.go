@@ -59,9 +59,34 @@ func applyEnv(cfg *api.Config) {
 			cfg.MeshPort = p
 		}
 	}
+	if v := os.Getenv("RACORE_MESH_GROUP"); v != "" {
+		cfg.MeshGroup = v
+	}
+	if v := os.Getenv("RACORE_MESH_HEARTBEAT_SEC"); v != "" {
+		if p := parseInt(v); p > 0 {
+			cfg.MeshHeartbeatSec = p
+		}
+	}
+	if v := os.Getenv("RACORE_BOOTSTRAP_PEERS"); v != "" {
+		cfg.BootstrapPeers = splitCSV(v)
+	}
 	if v := os.Getenv("RACORE_DATA_DIR"); v != "" {
 		cfg.DataDir = v
 	}
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ',' {
+			if i > start {
+				out = append(out, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return out
 }
 
 func DataDir() string {
