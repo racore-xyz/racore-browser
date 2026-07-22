@@ -3,6 +3,7 @@ package kubo
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -14,11 +15,12 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestStartNoExecutable(t *testing.T) {
-	os.Unsetenv("RACORE_KUBO_PATH")
+	t.Setenv("RACORE_KUBO_PATH", filepath.Join(t.TempDir(), "missing-ipfs"))
+	t.Setenv("PATH", t.TempDir())
 	dir, _ := os.MkdirTemp("", "god-kubo-*")
 	defer os.RemoveAll(dir)
 
-	m := New("http://127.0.0.1:5001", "http://127.0.0.1:8180", dir)
+	m := New("http://127.0.0.1:1", "http://127.0.0.1:8180", dir)
 	ctx := context.Background()
 
 	result, err := m.Start(ctx)

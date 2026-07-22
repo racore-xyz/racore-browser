@@ -106,15 +106,9 @@ func TestCanonicalJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Go's json.Marshal for map[string]any sorts keys alphabetically
-	var result map[string]any
-	json.Unmarshal(out, &result)
-	keys := make([]string, 0, len(result))
-	for k := range result {
-		keys = append(keys, k)
-	}
-	if keys[0] != "a" || keys[1] != "m" || keys[2] != "z" {
-		t.Fatalf("keys not sorted: %v", keys)
+	want := `{"a":"first","m":"middle","z":"last"}`
+	if string(out) != want {
+		t.Fatalf("canonical JSON mismatch: got %s, want %s", out, want)
 	}
 }
 

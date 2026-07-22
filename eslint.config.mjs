@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "desktop-dist/**",
     "dist/**",
     "dist-desktop/**",
+    "website/dist/**",
+    "website/.vinext/**",
     "src-tauri/target/**",
     "src-tauri/gen/**",
     "src-tauri/binaries/**",
