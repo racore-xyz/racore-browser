@@ -202,6 +202,27 @@ func TestCorsPreflight(t *testing.T) {
 	}
 }
 
+func TestOriginAllowed(t *testing.T) {
+	cases := []struct {
+		origin string
+		want   bool
+	}{
+		{"http://localhost:3000", true},
+		{"http://127.0.0.1:3000", true},
+		{"http://[::1]:3000", true},
+		{"http://127.0.0.1:47832", true},
+		{"https://racore.xyz", true},
+		{"http://evil.com", false},
+		{"https://racore.xyz.evil.com", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := originAllowed(c.origin); got != c.want {
+			t.Errorf("originAllowed(%q) = %v, want %v", c.origin, got, c.want)
+		}
+	}
+}
+
 func TestWriteJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 	writeJSON(w, 201, map[string]string{"status": "created"})

@@ -3,6 +3,9 @@ package providers
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -197,5 +200,44 @@ func TestProviderCatalogImmutability(t *testing.T) {
 		default:
 			t.Fatalf("provider %s has unknown auth type: %s", p.ID, p.Auth)
 		}
+	}
+}
+
+func TestParseProviderError(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"openai style", `{"error":{"message":"invalid api key"}}`, "invalid api key"},
+		{"string error", `{"error":"rate limited"}`, "rate limited"},
+		{"message field", `{"message":"bad request"}`, "bad request"},
+		{"detail field", `{"detail":"not connected"}`, "not connected"},
+		{"plain text", `Unauthorized`, "Unauthorized"},
+		{"empty", ``, ""},
+	}
+	for _, c := range cases {
+		if got := parseProviderError([]byte(c.raw)); got != c.want {
+			t.Errorf("%s: parseProviderError(%q) = %q, want %q", c.name, c.raw, got, c.want)
+		}
+	}
+}
+
+func TestChatPropagatesUpstreamError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":{"message":"invalid api key"}}`))
+	}))
+	defer srv.Close()
+
+	g := NewGateway(keyFunc(map[string]string{"openrouter": "sk-test"}))
+	p := Provider{ID: "openrouter", Kind: "openai", BaseURL: srv.URL, DefaultModel: "test", Auth: "bearer"}
+
+	_, err := g.openaiCompat(context.Background(), p, "test", []map[string]string{{"role": "user", "content": "hi"}}, "")
+	if err == nil {
+		t.Fatal("expected error for 401 upstream response")
+	}
+	if !strings.Contains(err.Error(), "invalid api key") {
+		t.Fatalf("expected upstream detail in error, got: %v", err)
 	}
 }

@@ -142,17 +142,22 @@ func (s *Server) Stop() {
 	}
 }
 
+var allowedOrigins = map[string]bool{
+	"http://localhost:3000":  true,
+	"http://127.0.0.1:3000":  true,
+	"http://[::1]:3000":      true,
+	"http://127.0.0.1:47832": true,
+	"https://racore.xyz":     true,
+}
+
+func originAllowed(origin string) bool {
+	return allowedOrigins[origin]
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		allowed := map[string]bool{
-			"http://localhost:3000":        true,
-			"http://127.0.0.1:3000":        true,
-			"http://[::1]:3000":            true,
-			"http://127.0.0.1:47832":       true,
-			"https://racore.xyz":           true,
-		}
-		if allowed[origin] {
+		if originAllowed(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")

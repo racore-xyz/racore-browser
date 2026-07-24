@@ -203,6 +203,9 @@ func (g *Gateway) doOpenAI(ctx context.Context, url, key string, body any, provi
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, providerError(providerID, resp.StatusCode, raw)
+	}
 	var result map[string]any
 	json.Unmarshal(raw, &result)
 
@@ -261,6 +264,9 @@ func (g *Gateway) anthropicChat(ctx context.Context, p Provider, model string, m
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, providerError(p.ID, resp.StatusCode, raw)
+	}
 	var result map[string]any
 	json.Unmarshal(raw, &result)
 
@@ -310,6 +316,9 @@ func (g *Gateway) geminiChat(ctx context.Context, p Provider, model string, mess
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, providerError(p.ID, resp.StatusCode, raw)
+	}
 	var result map[string]any
 	json.Unmarshal(raw, &result)
 
@@ -348,6 +357,9 @@ func (g *Gateway) ollamaChat(ctx context.Context, p Provider, model string, mess
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, providerError(p.ID, resp.StatusCode, raw)
+	}
 	var result map[string]any
 	json.Unmarshal(raw, &result)
 
@@ -399,6 +411,41 @@ func buildMessages(messages []map[string]string, system string) []map[string]any
 		out = append(out, map[string]any{"role": m["role"], "content": m["content"]})
 	}
 	return out
+}
+
+func providerError(providerID string, status int, raw []byte) error {
+	detail := parseProviderError(raw)
+	if detail == "" {
+		return fmt.Errorf("%s returned status %d", providerID, status)
+	}
+	return fmt.Errorf("%s returned status %d: %s", providerID, status, detail)
+}
+
+func parseProviderError(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	if errField, ok := parsed["error"]; ok {
+		switch e := errField.(type) {
+		case string:
+			return e
+		case map[string]any:
+			if msg, ok := e["message"].(string); ok {
+				return msg
+			}
+		}
+	}
+	if msg, ok := parsed["message"].(string); ok {
+		return msg
+	}
+	if detail, ok := parsed["detail"].(string); ok {
+		return detail
+	}
+	return strings.TrimSpace(string(raw))
 }
 
 func extractText(result map[string]any) string {
