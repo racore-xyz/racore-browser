@@ -21,6 +21,7 @@ type Vault struct {
 	path     string
 	keyPath  string
 	secrets  map[string]string
+	key      []byte
 }
 
 func New(dataDir string) *Vault {
@@ -120,21 +121,52 @@ func (v *Vault) save() error {
 		return err
 	}
 
-	return os.WriteFile(v.path, encrypted, 0600)
+	return writeFileAtomic(v.path, encrypted, 0600)
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 func (v *Vault) loadOrCreateKey() ([]byte, error) {
+	if v.key != nil {
+		return v.key, nil
+	}
 	if data, err := os.ReadFile(v.keyPath); err == nil && len(data) == 32 {
-		return data, nil
+		v.key = data
+		return v.key, nil
 	}
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(v.keyPath, key, 0600); err != nil {
+	if err := writeFileAtomic(v.keyPath, key, 0600); err != nil {
 		return nil, err
 	}
-	return key, nil
+	v.key = key
+	return v.key, nil
 }
 
 func encrypt(key, plaintext []byte) ([]byte, error) {

@@ -202,6 +202,51 @@ func TestCorsPreflight(t *testing.T) {
 	}
 }
 
+func TestHubBroadcastAddsTimestamp(t *testing.T) {
+	h := NewHub()
+	slow := &wsClient{conn: nil, send: make(chan []byte, 1)}
+	h.add(slow)
+
+	event := map[string]any{"type": "test"}
+	h.Broadcast(event)
+
+	if _, ok := event["timestamp"]; !ok {
+		t.Fatal("expected timestamp to be set on broadcast event")
+	}
+	if ts, _ := event["timestamp"].(int64); ts <= 0 {
+		t.Fatalf("expected positive timestamp, got %v", event["timestamp"])
+	}
+
+	select {
+	case <-slow.send:
+	default:
+		t.Fatal("expected client to receive first message")
+	}
+}
+
+func TestHubBroadcastDropsSlowClient(t *testing.T) {
+	h := NewHub()
+	slow := &wsClient{conn: nil, send: make(chan []byte, 1)}
+	h.add(slow)
+
+	// Fill the buffer, then broadcast again: the slow client must be dropped
+	// rather than blocking the broadcaster.
+	h.Broadcast(map[string]any{"type": "one"})
+	h.Broadcast(map[string]any{"type": "two"})
+
+	h.mu.RLock()
+	_, present := h.clients[slow]
+	count := len(h.clients)
+	h.mu.RUnlock()
+
+	if present {
+		t.Fatal("expected slow client to be removed after buffer overflow")
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 clients, got %d", count)
+	}
+}
+
 func TestOriginAllowed(t *testing.T) {
 	cases := []struct {
 		origin string

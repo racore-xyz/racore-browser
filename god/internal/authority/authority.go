@@ -102,7 +102,33 @@ func (a *Authority) save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(a.path, data, 0600)
+	return writeFileAtomic(a.path, data, 0600)
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 func (a *Authority) Create(domain string) (*DomainInfo, []map[string]string, error) {
@@ -132,7 +158,7 @@ func (a *Authority) Create(domain string) (*DomainInfo, []map[string]string, err
 		return nil, nil, fmt.Errorf("marshal authority key for %s: %w", domain, err)
 	}
 	block := &pem.Block{Type: "PRIVATE KEY", Bytes: b}
-	if err := os.WriteFile(pemPath, pem.EncodeToMemory(block), 0600); err != nil {
+	if err := writeFileAtomic(pemPath, pem.EncodeToMemory(block), 0600); err != nil {
 		return nil, nil, fmt.Errorf("write authority key for %s: %w", domain, err)
 	}
 

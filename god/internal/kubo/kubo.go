@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,8 +76,10 @@ func (m *Manager) Start(ctx context.Context) (map[string]any, error) {
 	}
 
 	gatewayPort := "8180"
-	if n, err := fmt.Sscanf(m.gatewayURL, "%*s%d", &gatewayPort); err != nil && n != 1 {
-		gatewayPort = "8180"
+	if u, err := url.Parse(m.gatewayURL); err == nil {
+		if p := u.Port(); p != "" {
+			gatewayPort = p
+		}
 	}
 
 	configCmd := exec.CommandContext(ctx, m.execPath, "config", "Addresses.Gateway", fmt.Sprintf("/ip4/127.0.0.1/tcp/%s", gatewayPort))

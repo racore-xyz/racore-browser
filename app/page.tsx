@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const providers = ["OpenAI", "Anthropic", "Gemini", "OpenRouter", "Kimi", "Ollama", "OpenCode", "Claude Code", "Kimi Code"];
 
@@ -23,15 +23,25 @@ function Arrow() {
 
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const progressRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let frame = 0;
     const updateProgress = () => {
+      frame = 0;
       const max = document.documentElement.scrollHeight - window.innerHeight;
-      setProgress(max > 0 ? window.scrollY / max : 0);
+      const value = max > 0 ? window.scrollY / max : 0;
+      if (progressRef.current) {
+        progressRef.current.style.transform = `scaleX(${value})`;
+      }
+    };
+    const onScroll = () => {
+      if (frame === 0) {
+        frame = window.requestAnimationFrame(updateProgress);
+      }
     };
     updateProgress();
-    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     const observer = new IntersectionObserver(
       (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add("is-visible")),
@@ -39,7 +49,8 @@ export default function Home() {
     );
     document.querySelectorAll("[data-reveal]").forEach((element) => observer.observe(element));
     return () => {
-      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("scroll", onScroll);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
   }, []);
@@ -54,7 +65,7 @@ export default function Home() {
         event.currentTarget.style.setProperty("--pointer-y", `${y * -8}deg`);
       }}
     >
-      <div className="scroll-progress" style={{ transform: `scaleX(${progress})` }} />
+      <div className="scroll-progress" ref={progressRef} style={{ transform: "scaleX(0)" }} />
       <header className="landing-nav">
         <a className="landing-logo" href="#top" aria-label="Racore home">
           <img src="/brand/racore-logo.png" alt="Racore.xyz" width="202" height="52" />

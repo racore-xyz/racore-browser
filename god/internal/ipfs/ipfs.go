@@ -26,18 +26,23 @@ func New(apiURL, gatewayURL string) *Bridge {
 }
 
 func (b *Bridge) Status(ctx context.Context) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "POST", b.apiURL+"/api/v0/id", nil)
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := b.client.Do(req)
 	if err != nil {
 		return map[string]any{"online": false}, nil
 	}
 	defer resp.Body.Close()
 
-	var result map[string]any
+	if resp.StatusCode != http.StatusOK {
+		return map[string]any{"online": false}, nil
+	}
+
+	result := map[string]any{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	result["online"] = true
 	return result, nil

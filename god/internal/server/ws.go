@@ -5,8 +5,16 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
+)
+
+const (
+	clientSendBuffer = 64
+	writeWait        = 10 * time.Second
+	pongWait         = 60 * time.Second
+	pingPeriod       = (pongWait * 9) / 10
 )
 
 var upgrader = websocket.Upgrader{
@@ -19,54 +27,87 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type wsClient struct {
+	conn *websocket.Conn
+	send chan []byte
+	once sync.Once
+}
+
+func (c *wsClient) close() {
+	c.once.Do(func() { close(c.send) })
+}
+
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[*websocket.Conn]struct{}
+	clients map[*wsClient]struct{}
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		clients: make(map[*websocket.Conn]struct{}),
+		clients: make(map[*wsClient]struct{}),
 	}
 }
 
-func (h *Hub) Add(conn *websocket.Conn) {
+func (h *Hub) add(c *wsClient) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[conn] = struct{}{}
+	h.clients[c] = struct{}{}
 }
 
-func (h *Hub) Remove(conn *websocket.Conn) {
+func (h *Hub) remove(c *wsClient) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.clients, conn)
+	if _, ok := h.clients[c]; ok {
+		delete(h.clients, c)
+		c.close()
+	}
 }
 
 func (h *Hub) Broadcast(event map[string]any) {
-	event["timestamp"] = json.Number("0")
+	event["timestamp"] = time.Now().UnixMilli()
 
 	data, err := json.Marshal(event)
 	if err != nil {
 		return
 	}
 
-	var stale []*websocket.Conn
+	var stale []*wsClient
 	h.mu.RLock()
-	for conn := range h.clients {
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Printf("ws write: %v", err)
-			conn.Close()
-			stale = append(stale, conn)
+	for c := range h.clients {
+		select {
+		case c.send <- data:
+		default:
+			stale = append(stale, c)
 		}
 	}
 	h.mu.RUnlock()
 
-	if len(stale) > 0 {
-		h.mu.Lock()
-		for _, conn := range stale {
-			delete(h.clients, conn)
+	for _, c := range stale {
+		log.Printf("ws: dropping slow client")
+		h.remove(c)
+	}
+}
+
+func (c *wsClient) writePump() {
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case data, ok := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				_ = c.conn.WriteMessage(websocket.CloseMessage, nil)
+				return
+			}
+			if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
-		h.mu.Unlock()
 	}
 }
 
@@ -76,22 +117,32 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ws upgrade: %v", err)
 		return
 	}
-	s.hub.Add(conn)
+
+	client := &wsClient{conn: conn, send: make(chan []byte, clientSendBuffer)}
+	s.hub.add(client)
 
 	ready, _ := json.Marshal(map[string]any{
 		"type": "racore.ready", "version": s.version,
 		"mesh": s.mesh.Status(),
 	})
-	conn.WriteMessage(websocket.TextMessage, ready)
+	client.send <- ready
+
+	go func() {
+		client.writePump()
+		conn.Close()
+	}()
 
 	go func() {
 		defer func() {
-			s.hub.Remove(conn)
+			s.hub.remove(client)
 			conn.Close()
 		}()
+		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+		conn.SetPongHandler(func(string) error {
+			return conn.SetReadDeadline(time.Now().Add(pongWait))
+		})
 		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
+			if _, _, err := conn.ReadMessage(); err != nil {
 				break
 			}
 		}
