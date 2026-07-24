@@ -86,9 +86,15 @@ func Verify(publicKeyB64 string, payload []byte, signatureB64 string) (ed25519.P
 	if err != nil {
 		return nil, fmt.Errorf("decode public key: %w", err)
 	}
+	if len(pubBytes) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("invalid public key length: %d", len(pubBytes))
+	}
 	sig, err := base64.RawURLEncoding.DecodeString(signatureB64)
 	if err != nil {
 		return nil, fmt.Errorf("decode signature: %w", err)
+	}
+	if len(sig) != ed25519.SignatureSize {
+		return nil, fmt.Errorf("invalid signature length: %d", len(sig))
 	}
 	pub := ed25519.PublicKey(pubBytes)
 	if !ed25519.Verify(pub, payload, sig) {

@@ -13,11 +13,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/racore/god/internal/protocol"
 	"github.com/racore/god/pkg/api"
 )
 
@@ -291,32 +291,5 @@ func (a *Authority) loadDomainKey(domain string) (ed25519.PrivateKey, error) {
 }
 
 func canonicalJSON(v any) ([]byte, error) {
-	m := toMap(v)
-	sorted := sortMap(m)
-	return json.Marshal(sorted)
-}
-
-func toMap(v any) map[string]any {
-	out := make(map[string]any)
-	data, _ := json.Marshal(v)
-	json.Unmarshal(data, &out)
-	return out
-}
-
-func sortMap(m map[string]any) map[string]any {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make(map[string]any, len(m))
-	for _, k := range keys {
-		v := m[k]
-		if sub, ok := v.(map[string]any); ok {
-			out[k] = sortMap(sub)
-		} else {
-			out[k] = v
-		}
-	}
-	return out
+	return protocol.CanonicalJSON(v)
 }

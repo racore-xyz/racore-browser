@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"encoding/base64"
 	"os"
 	"testing"
 )
@@ -102,5 +103,33 @@ func TestTamperedSignature(t *testing.T) {
 
 	if _, err := Verify(id.PublicKeyBase64(), []byte("tampered"), sig); err == nil {
 		t.Fatal("expected verify to fail for tampered payload")
+	}
+}
+
+func TestVerifyRejectsMalformedKeyAndSignature(t *testing.T) {
+	dir, err := os.MkdirTemp("", "gomesh-identity-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	id, err := NewNodeIdentity(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte("test")
+	sig, err := id.Sign(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	shortKey := base64.RawURLEncoding.EncodeToString([]byte("too-short"))
+	if _, err := Verify(shortKey, payload, sig); err == nil {
+		t.Fatal("expected error for wrong-length public key")
+	}
+
+	shortSig := base64.RawURLEncoding.EncodeToString([]byte("bad"))
+	if _, err := Verify(id.PublicKeyBase64(), payload, shortSig); err == nil {
+		t.Fatal("expected error for wrong-length signature")
 	}
 }
