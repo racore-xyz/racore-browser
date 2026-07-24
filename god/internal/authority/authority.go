@@ -127,10 +127,13 @@ func (a *Authority) Create(domain string) (*DomainInfo, []map[string]string, err
 	controller := "did:key:" + base64.RawURLEncoding.EncodeToString(pub)
 
 	pemPath := filepath.Join(a.dataDir, fmt.Sprintf("authority-%s.pem", domain))
-	b, _ := x509.MarshalPKCS8PrivateKey(priv)
+	b, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal authority key for %s: %w", domain, err)
+	}
 	block := &pem.Block{Type: "PRIVATE KEY", Bytes: b}
 	if err := os.WriteFile(pemPath, pem.EncodeToMemory(block), 0600); err != nil {
-		log.Printf("authority: write pem %s: %v", pemPath, err)
+		return nil, nil, fmt.Errorf("write authority key for %s: %w", domain, err)
 	}
 
 	info := &DomainInfo{
