@@ -27,6 +27,30 @@ func TestInvalidGroup(t *testing.T) {
 	}
 }
 
+func TestSendToRejectsOversized(t *testing.T) {
+	tport, err := NewUDPTransport("239.255.77.77", 47999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oversized := make([]byte, MaxDatagramSize+1)
+	err = tport.SendTo(oversized, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9999})
+	if err != ErrDatagramTooLarge {
+		t.Fatalf("expected ErrDatagramTooLarge, got %v", err)
+	}
+}
+
+func TestBroadcastRejectsOversized(t *testing.T) {
+	tport, err := NewUDPTransport("239.255.77.77", 47999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oversized := make([]byte, MaxDatagramSize+1)
+	err = tport.Broadcast(oversized)
+	if err != ErrDatagramTooLarge {
+		t.Fatalf("expected ErrDatagramTooLarge, got %v", err)
+	}
+}
+
 func TestSendToNotStarted(t *testing.T) {
 	tport, err := NewUDPTransport("239.255.77.77", 47999)
 	if err != nil {

@@ -11,10 +11,14 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+const MaxDatagramSize = 1400
+
 type Message struct {
 	Data []byte
 	Addr *net.UDPAddr
 }
+
+var ErrDatagramTooLarge = fmt.Errorf("datagram exceeds %d byte limit", MaxDatagramSize)
 
 type UDPTransport struct {
 	group   *net.UDPAddr
@@ -152,6 +156,9 @@ func (t *UDPTransport) readLoop(ctx context.Context, recvChan chan<- Message) {
 }
 
 func (t *UDPTransport) SendTo(data []byte, addr *net.UDPAddr) error {
+	if len(data) > MaxDatagramSize {
+		return ErrDatagramTooLarge
+	}
 	t.mu.Lock()
 	conn := t.conn
 	t.mu.Unlock()
@@ -166,6 +173,9 @@ func (t *UDPTransport) SendTo(data []byte, addr *net.UDPAddr) error {
 }
 
 func (t *UDPTransport) Broadcast(data []byte) error {
+	if len(data) > MaxDatagramSize {
+		return ErrDatagramTooLarge
+	}
 	t.mu.Lock()
 	pc := t.pc
 	t.mu.Unlock()
