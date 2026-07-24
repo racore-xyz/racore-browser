@@ -2,7 +2,10 @@ package authority
 
 import (
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/racore/god/pkg/api"
 )
 
 func TestCreateDomain(t *testing.T) {
@@ -112,21 +115,48 @@ func TestPublishRelease(t *testing.T) {
 	a.Load()
 	a.Create("rel.com")
 
-	manifest := struct {
-		Version string `json:"version"`
-		CID     string `json:"cid"`
-		ContentRoot string `json:"contentRoot"`
-		Entrypoint  string `json:"entrypoint"`
-		Files       int    `json:"files"`
-		Size        int    `json:"size"`
-	}{
+	published, err := a.PublishRelease("rel.com", api.ReleaseManifest{
 		Version: "1.0.0", CID: "QmTest", ContentRoot: "root123",
 		Entrypoint: "index.html", Files: 3, Size: 1024,
+	})
+	if err != nil {
+		t.Fatalf("PublishRelease: %v", err)
+	}
+	if published.Signature == "" {
+		t.Fatal("expected signed manifest")
 	}
 
-	// We need to use the api.ReleaseManifest type
-	// The PublishRelease takes api.ReleaseManifest
-	_ = manifest
+	rels, err := a.Releases("rel.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rels) != 1 {
+		t.Fatalf("expected 1 release, got %d", len(rels))
+	}
+
+	id := rels[0].ReleaseID
+	if !strings.HasPrefix(id, "rcp2-") {
+		t.Fatalf("expected rcp2- prefix, got %s", id)
+	}
+	if len(id) != len("rcp2-")+32 {
+		t.Fatalf("expected 32 hex chars after prefix, got %s", id)
+	}
+
+	second, err := a.PublishRelease("rel.com", api.ReleaseManifest{
+		Version: "2.0.0", CID: "QmTest2", ContentRoot: "root456",
+		Entrypoint: "index.html", Files: 4, Size: 2048,
+	})
+	if err != nil {
+		t.Fatalf("PublishRelease second: %v", err)
+	}
+	if second.Parent != id {
+		t.Fatalf("expected parent %s, got %s", id, second.Parent)
+	}
+
+	rels, _ = a.Releases("rel.com")
+	if rels[1].ReleaseID == id {
+		t.Fatal("distinct releases must yield distinct release IDs")
+	}
 }
 
 func TestDelegate(t *testing.T) {

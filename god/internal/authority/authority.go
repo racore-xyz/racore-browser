@@ -217,7 +217,8 @@ func (a *Authority) PublishRelease(domain string, manifest api.ReleaseManifest) 
 	sig := ed25519.Sign(priv, canonical)
 	manifest.Signature = base64.RawURLEncoding.EncodeToString(sig)
 
-	releaseID := "rcp2-" + hex.EncodeToString(sha256.New().Sum(append(canonical, sig...))[:16])
+	sum := sha256.Sum256(append(canonical, sig...))
+	releaseID := "rcp2-" + hex.EncodeToString(sum[:16])
 
 	entry := ReleaseEntry{Manifest: manifest, ReleaseID: releaseID}
 	info.Releases = append(info.Releases, entry)
