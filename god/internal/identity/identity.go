@@ -2,6 +2,7 @@ package identity
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -39,7 +40,7 @@ func NewNodeIdentity(root string) (*NodeIdentity, error) {
 			return nil, fmt.Errorf("key is not Ed25519")
 		}
 	} else {
-		_, priv, err := ed25519.GenerateKey(nil)
+		_, priv, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
 			return nil, fmt.Errorf("generate key: %w", err)
 		}
