@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,6 +33,12 @@ function targetPlatform(triple) {
 
 const platform = targetPlatform(target);
 const go = process.env.RACORE_GO || "go";
+const localAIKey = `${platform.goos === "windows" ? "windows" : platform.goos}-${platform.goarch === "amd64" ? "x64" : "arm64"}`;
+execFileSync(process.execPath, [join(projectRoot, "scripts", "prepare-local-ai.mjs")], {
+  cwd: projectRoot,
+  env: { ...process.env, RACORE_TAURI_TARGET: target },
+  stdio: "inherit",
+});
 const binaryDir = join(tauriRoot, "binaries");
 mkdirSync(binaryDir, { recursive: true });
 
@@ -87,6 +93,21 @@ const kuboDestination = join(
 mkdirSync(dirname(kuboDestination), { recursive: true });
 copyFileSync(kuboSource, kuboDestination);
 
+const localAISource = join(projectRoot, "desktop", "runtime", "local-ai");
+const localAIDestination = join(tauriRoot, "resources", "local-ai");
+rmSync(localAIDestination, { recursive: true, force: true });
+mkdirSync(localAIDestination, { recursive: true });
+cpSync(
+  join(localAISource, "models"),
+  join(localAIDestination, "models"),
+  { recursive: true },
+);
+cpSync(
+  join(localAISource, "runtime", localAIKey),
+  join(localAIDestination, "runtime"),
+  { recursive: true },
+);
+
 console.log(
-  `Prepared ${target} sidecars and ${basename(kuboSource)} for Tauri.`,
+  `Prepared ${target} sidecars, ${basename(kuboSource)}, and bundled local AI for Tauri.`,
 );

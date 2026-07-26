@@ -43,7 +43,7 @@ test("sidecar preparation compiles Go code without touching mesh sources", async
   assert.doesNotMatch(source, /internal[\\/]mesh/);
 });
 
-test("Tauri bundle declares only named Racore sidecars and platform Kubo resources", async () => {
+test("Tauri bundle declares named sidecars, Kubo, and local AI resources", async () => {
   const [config, windows, linux, macos] = await Promise.all([
     "tauri.conf.json",
     "tauri.windows.conf.json",
@@ -59,8 +59,10 @@ test("Tauri bundle declares only named Racore sidecars and platform Kubo resourc
     "binaries/racore",
   ]);
   assert.equal(windows.bundle.resources["resources/kubo/ipfs.exe"], "kubo/ipfs.exe");
+  assert.equal(windows.bundle.resources["resources/local-ai/"], "local-ai/");
   for (const platform of [linux, macos]) {
     assert.equal(platform.bundle.resources["resources/kubo/ipfs"], "kubo/ipfs");
+    assert.equal(platform.bundle.resources["resources/local-ai/"], "local-ai/");
   }
 });
 

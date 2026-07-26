@@ -16,7 +16,7 @@ impl DaemonClient {
     pub fn new() -> Self {
         let client = Client::builder()
             .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(60))
+            .timeout(Duration::from_secs(120))
             .build()
             .expect("static daemon HTTP client configuration must be valid");
         Self { client }
@@ -154,7 +154,7 @@ fn route_allows(method: &Method, path: &str) -> bool {
     let segments: Vec<_> = path.trim_matches('/').split('/').collect();
     match (method, segments.as_slice()) {
         (&Method::GET, ["health"])
-        | (&Method::GET, ["v1", "providers"])
+        | (&Method::GET, ["v1", "local-ai", "status"])
         | (&Method::POST, ["v1", "chat"])
         | (&Method::GET, ["v1", "mesh", "status"])
         | (&Method::GET, ["v1", "mesh", "peers"])
@@ -163,21 +163,10 @@ fn route_allows(method: &Method, path: &str) -> bool {
         | (&Method::GET, ["v1", "authority", "domains"])
         | (&Method::GET, ["v1", "authority", "network-domains"])
         | (&Method::POST, ["v1", "authority", "domains"]) => true,
-        (&Method::DELETE, ["v1", "providers", provider]) => safe_identifier(provider),
-        (&Method::PUT, ["v1", "providers", provider, "connect"])
-        | (&Method::GET, ["v1", "providers", provider, "health"]) => safe_identifier(provider),
         (&Method::GET, ["v1", "authority", "domains", domain, "available"]) => safe_domain(domain),
         (&Method::GET, ["v1", "authority", "resolve", domain]) => safe_domain(domain),
         _ => false,
     }
-}
-
-fn safe_identifier(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 fn safe_domain(value: &str) -> bool {
@@ -204,10 +193,7 @@ mod tests {
     fn allows_current_react_routes() {
         let routes = [
             ("/health", "GET"),
-            ("/v1/providers", "GET"),
-            ("/v1/providers/open-router/connect", "PUT"),
-            ("/v1/providers/open-router", "DELETE"),
-            ("/v1/providers/open-router/health", "GET"),
+            ("/v1/local-ai/status", "GET"),
             ("/v1/chat", "POST"),
             ("/v1/mesh/status", "GET"),
             ("/v1/mesh/peers", "GET"),

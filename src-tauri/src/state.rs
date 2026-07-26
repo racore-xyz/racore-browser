@@ -47,12 +47,39 @@ impl AppState {
                 kubo_path.display()
             )));
         }
+        let llama_name = if cfg!(windows) {
+            "llama-server.exe"
+        } else {
+            "llama-server"
+        };
+        let llama_path = resource_dir
+            .join("local-ai")
+            .join("runtime")
+            .join(llama_name);
+        let model_path = resource_dir
+            .join("local-ai")
+            .join("models")
+            .join("hammer2.0-0.5b-q8_0.gguf");
+        if !llama_path.is_file() {
+            return Err(CommandError::backend(format!(
+                "bundled llama.cpp executable is missing: {}",
+                llama_path.display()
+            )));
+        }
+        if !model_path.is_file() {
+            return Err(CommandError::backend(format!(
+                "bundled local model is missing: {}",
+                model_path.display()
+            )));
+        }
 
         let command = app
             .shell()
             .sidecar("racored")
             .map_err(|error| CommandError::backend(error.to_string()))?
             .env("RACORE_KUBO_PATH", &kubo_path)
+            .env("RACORE_LLAMA_SERVER_PATH", &llama_path)
+            .env("RACORE_LOCAL_MODEL_PATH", &model_path)
             .current_dir(&resource_dir);
         let (mut events, child) = command
             .spawn()
