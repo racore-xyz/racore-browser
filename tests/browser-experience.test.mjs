@@ -61,25 +61,3 @@ test("browser exposes Racore and normal browsing modes with mesh discovery", asy
   assert.match(source, /\/v1\/authority\/resolve\//);
   assert.match(source, /Ready on your network/);
 });
-
-test("workspace shell groups browser tabs into persistent spaces", async () => {
-  const [browserSource, shellSource] = await Promise.all([
-    readFile(
-      new URL("../app/components/AgenticBrowserView.tsx", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/RacoreProductApp.tsx", import.meta.url),
-      "utf8",
-    ),
-  ]);
-
-  assert.match(browserSource, /spaceId: string/);
-  assert.match(browserSource, /tab\.spaceId === spaceId/);
-  assert.match(browserSource, /tab-cluster-label/);
-  assert.match(shellSource, /racore:workspace-spaces:v1/);
-  assert.match(shellSource, /Work/);
-  assert.match(shellSource, /Play/);
-  assert.match(shellSource, /Build/);
-  assert.match(shellSource, /workspace-dock/);
-});

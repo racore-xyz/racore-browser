@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   daemonRequest,
   listProviders,
@@ -28,7 +28,6 @@ type BrowserTab = {
   query: string;
   messages: ChatMessage[];
   mediaUrl?: string;
-  spaceId: string;
 };
 type Health = {
   mesh: { online: boolean; peers: number };
@@ -70,7 +69,7 @@ function isDirectVideoUrl(value: string): boolean {
   }
 }
 
-function createTab(spaceId: string): BrowserTab {
+function createTab(): BrowserTab {
   return {
     id:
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -79,43 +78,14 @@ function createTab(spaceId: string): BrowserTab {
     title: "New tab",
     query: "",
     messages: [],
-    spaceId,
   };
 }
 
-type AgenticBrowserViewProps = {
-  spaceId?: string;
-  spaceLabel?: string;
-};
-
-export function AgenticBrowserView({
-  spaceId = "work",
-  spaceLabel = "Work",
-}: AgenticBrowserViewProps) {
+export function AgenticBrowserView() {
   const [tabs, setTabs] = useState<BrowserTab[]>([
-    {
-      id: "initial-work-tab",
-      title: "New tab",
-      query: "",
-      messages: [],
-      spaceId: "work",
-    },
-    {
-      id: "initial-play-tab",
-      title: "New tab",
-      query: "",
-      messages: [],
-      spaceId: "play",
-    },
-    {
-      id: "initial-build-tab",
-      title: "New tab",
-      query: "",
-      messages: [],
-      spaceId: "build",
-    },
+    { id: "initial-tab", title: "New tab", query: "", messages: [] },
   ]);
-  const [activeTabId, setActiveTabId] = useState("initial-work-tab");
+  const [activeTabId, setActiveTabId] = useState("initial-tab");
   const [provider, setProvider] = useState("ollama");
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
@@ -125,14 +95,13 @@ export function AgenticBrowserView({
   const [storageReady, setStorageReady] = useState(false);
   const [mode, setMode] = useState<BrowserMode>("racore");
   const [networkDomains, setNetworkDomains] = useState<NetworkDomain[]>([]);
-  const spaceTabs = tabs.filter((tab) => tab.spaceId === spaceId);
-  const activeTab =
-    spaceTabs.find((tab) => tab.id === activeTabId) ?? spaceTabs[0];
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const query = activeTab?.query ?? "";
   const messages = activeTab?.messages ?? [];
   const mediaUrl = activeTab?.mediaUrl;
-  const isUrl = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/.*)?$/i.test(
-    query.trim(),
+  const isUrl = useMemo(
+    () => /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/.*)?$/i.test(query.trim()),
+    [query],
   );
 
   useEffect(() => {
@@ -182,7 +151,7 @@ export function AgenticBrowserView({
             typeof tab.query === "string" &&
             Array.isArray(tab.messages) &&
             (tab.mediaUrl === undefined || isDirectVideoUrl(tab.mediaUrl)),
-        ).map((tab) => ({ ...tab, spaceId: tab.spaceId || "work" }));
+        );
         if (!restored?.length) return;
         setTabs(restored);
         setActiveTabId(
@@ -209,25 +178,17 @@ export function AgenticBrowserView({
   }, [tabs, activeTabId, mode, storageReady]);
 
   function updateActiveTab(update: (tab: BrowserTab) => BrowserTab) {
-    const targetId = activeTab?.id;
-    if (!targetId) return;
     setTabs((items) =>
-      items.map((tab) => (tab.id === targetId ? update(tab) : tab)),
+      items.map((tab) => (tab.id === activeTabId ? update(tab) : tab)),
     );
   }
 
   function setQuery(value: string) {
-    if (!activeTab) {
-      const tab = { ...createTab(spaceId), query: value };
-      setTabs((items) => [...items, tab]);
-      setActiveTabId(tab.id);
-      return;
-    }
     updateActiveTab((tab) => ({ ...tab, query: value }));
   }
 
   function addTab() {
-    const tab = createTab(spaceId);
+    const tab = createTab();
     setTabs((items) => [...items, tab]);
     setActiveTabId(tab.id);
     setError("");
@@ -235,17 +196,14 @@ export function AgenticBrowserView({
   }
 
   function closeTab(id: string) {
-    if (spaceTabs.length === 1) {
-      const replacement = createTab(spaceId);
-      setTabs((items) => [
-        ...items.filter((tab) => tab.spaceId !== spaceId),
-        replacement,
-      ]);
+    if (tabs.length === 1) {
+      const replacement = createTab();
+      setTabs([replacement]);
       setActiveTabId(replacement.id);
     } else {
-      const index = spaceTabs.findIndex((tab) => tab.id === id);
-      const remaining = spaceTabs.filter((tab) => tab.id !== id);
-      setTabs((items) => items.filter((tab) => tab.id !== id));
+      const index = tabs.findIndex((tab) => tab.id === id);
+      const remaining = tabs.filter((tab) => tab.id !== id);
+      setTabs(remaining);
       if (id === activeTabId) {
         setActiveTabId(remaining[Math.max(0, index - 1)].id);
       }
@@ -412,10 +370,9 @@ export function AgenticBrowserView({
         </button>
       </div>
       <div className="real-tabs">
-        <span className="tab-cluster-label">{spaceLabel}</span>
-        {spaceTabs.map((tab) => (
+        {tabs.map((tab) => (
           <button
-            className={tab.id === activeTab?.id ? "active" : ""}
+            className={tab.id === activeTabId ? "active" : ""}
             key={tab.id}
             onClick={() => {
               setActiveTabId(tab.id);
