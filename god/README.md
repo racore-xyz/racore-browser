@@ -6,7 +6,7 @@ Complete rewrite of the Racore Python daemon in Go. Single static binary, no run
 
 | Binary | Description |
 |--------|-------------|
-| `racored` | Main daemon: HTTP API, WebSocket, P2P mesh, IPFS, domain authority, AI provider gateway |
+| `racored` | Main daemon: HTTP API, WebSocket, P2P mesh, IPFS, domain authority, and bundled local AI |
 | `racore` | CLI tool: status, domains, claim, publish, releases |
 
 ## Architecture
@@ -21,7 +21,7 @@ racored (single binary)
   │   ├── Graceful leave (goodbye messages)
   │   └── Unicast direct messaging (SendTo)
   ├── Kubo IPFS manager (subprocess)
-  └── AI provider gateway (OpenAI, Anthropic, Gemini, Ollama, etc.)
+  └── Local browser planner (Hammer 2.0 0.5B through llama.cpp)
 ```
 
 ## Build
@@ -53,10 +53,8 @@ go build -o build/racore ./cmd/racore/
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Full system health |
-| GET | `/v1/providers` | AI provider catalog |
-| PUT | `/v1/providers/{id}/connect` | Store API key |
-| DELETE | `/v1/providers/{id}` | Remove API key |
-| GET | `/v1/providers/{id}/health` | Provider connectivity |
+| GET | `/v1/local-ai/status` | Bundled local model status |
+| POST | `/v1/chat` | Plan a browser task with the bundled local model |
 | POST | `/v1/chat` | Chat completion |
 | GET | `/v1/ipfs/status` | IPFS node status |
 | POST | `/v1/ipfs/add` | Upload file to IPFS |

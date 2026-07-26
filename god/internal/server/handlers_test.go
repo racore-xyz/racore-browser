@@ -53,22 +53,22 @@ func TestHealthHandler(t *testing.T) {
 	}
 }
 
-func TestProvidersHandler(t *testing.T) {
+func TestLocalAIStatusHandler(t *testing.T) {
 	s := setupTestServer(t)
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/v1/providers", nil)
-	s.providersHandler(w, r)
+	r := httptest.NewRequest("GET", "/v1/local-ai/status", nil)
+	s.localAIStatusHandler(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var providers []api.Provider
-	if err := json.NewDecoder(w.Body).Decode(&providers); err != nil {
+	var status api.LocalAIStatus
+	if err := json.NewDecoder(w.Body).Decode(&status); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(providers) != 9 {
-		t.Fatalf("expected 9 providers, got %d", len(providers))
+	if status.Model != "MadeAgents/Hammer2.0-0.5b" || !status.LocalOnly {
+		t.Fatalf("unexpected local AI status: %#v", status)
 	}
 }
 

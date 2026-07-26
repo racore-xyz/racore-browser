@@ -12,67 +12,20 @@ import (
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	ipfsStatus, _ := s.ipfs.Status(r.Context())
 	writeJSON(w, 200, api.HealthResponse{
-		OK:        true,
-		Version:   s.version,
-		Mesh:      s.mesh.Status(),
-		IPFS:      ipfsStatus,
-		Providers: len(s.gateway.Catalog()),
+		OK:      true,
+		Version: s.version,
+		Mesh:    s.mesh.Status(),
+		IPFS:    ipfsStatus,
+		LocalAI: s.localAI.Status(r.Context()),
 	})
 }
 
-func (s *Server) providersHandler(w http.ResponseWriter, r *http.Request) {
-	catalog := s.gateway.Catalog()
-	writeJSON(w, 200, catalog)
-}
-
-func (s *Server) providerByIDHandler(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/providers/"), "/")
-	if len(parts) == 0 || parts[0] == "" {
-		writeError(w, 404, "provider not specified")
+func (s *Server) localAIStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		writeError(w, 405, "method not allowed")
 		return
 	}
-	providerID := parts[0]
-
-	switch r.Method {
-	case "PUT":
-		if len(parts) > 1 && parts[1] == "connect" {
-			var body struct {
-				APIKey string `json:"api_key"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				writeError(w, 400, "invalid body")
-				return
-			}
-			if len(body.APIKey) < 3 || len(body.APIKey) > 4096 {
-				writeError(w, 400, "invalid key length")
-				return
-			}
-			s.vault.Set(providerID, body.APIKey)
-			health, _ := s.gateway.Health(r.Context(), providerID)
-			s.hub.Broadcast(map[string]any{"type": "provider.connected", "provider": providerID})
-			writeJSON(w, 200, map[string]any{
-				"connected": true, "provider": providerID,
-				"health": health, "maskedKey": s.vault.Masked(providerID),
-			})
-			return
-		}
-	case "DELETE":
-		s.vault.Delete(providerID)
-		writeJSON(w, 200, map[string]any{"connected": false, "provider": providerID})
-		return
-	case "GET":
-		if len(parts) > 1 && parts[1] == "health" {
-			health, err := s.gateway.Health(r.Context(), providerID)
-			if err != nil {
-				writeError(w, 404, err.Error())
-				return
-			}
-			writeJSON(w, 200, health)
-			return
-		}
-	}
-
-	writeError(w, 405, "method not allowed")
+	writeJSON(w, 200, s.localAI.Status(r.Context()))
 }
 
 func (s *Server) chatHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,16 +40,16 @@ func (s *Server) chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.hub.Broadcast(map[string]any{"type": "agent.started", "provider": req.Provider, "model": req.Model})
+	s.hub.Broadcast(map[string]any{"type": "agent.started", "engine": "local"})
 
-	resp, err := s.gateway.Chat(r.Context(), req.Provider, req.Model, req.Messages, req.System)
+	resp, err := s.localAI.Chat(r.Context(), req.Messages, req.System)
 	if err != nil {
 		writeError(w, 502, err.Error())
 		return
 	}
 
 	s.hub.Broadcast(map[string]any{
-		"type": "agent.completed", "provider": req.Provider,
+		"type": "agent.completed", "engine": resp.Engine,
 		"model": resp.Model, "latencyMs": resp.LatencyMs,
 	})
 

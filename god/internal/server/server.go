@@ -11,16 +11,14 @@ import (
 	"github.com/racore/god/internal/authority"
 	"github.com/racore/god/internal/ipfs"
 	"github.com/racore/god/internal/kubo"
+	"github.com/racore/god/internal/localai"
 	"github.com/racore/god/internal/mesh"
-	"github.com/racore/god/internal/providers"
-	"github.com/racore/god/internal/vault"
 	"github.com/racore/god/pkg/api"
 )
 
 type Server struct {
 	cfg     api.Config
-	vault   *vault.Vault
-	gateway *providers.Gateway
+	localAI *localai.Manager
 	ipfs    *ipfs.Bridge
 	kubo    *kubo.Manager
 	author  *authority.Authority
@@ -31,19 +29,6 @@ type Server struct {
 }
 
 func New(cfg api.Config) *Server {
-	v := vault.New(cfg.DataDir)
-	if err := v.Load(); err != nil {
-		log.Printf("vault load: %v", err)
-	}
-
-	gateway := providers.NewGateway(func(id string) (string, error) {
-		key, ok := v.Get(id)
-		if !ok {
-			return "", fmt.Errorf("not connected")
-		}
-		return key, nil
-	})
-
 	ipfsBridge := ipfs.New(cfg.IPFSAPI, cfg.IPFSGateway)
 	kuboMgr := kubo.New(cfg.IPFSAPI, cfg.IPFSGateway, cfg.DataDir)
 	auth := authority.New(cfg.DataDir)
@@ -55,8 +40,7 @@ func New(cfg api.Config) *Server {
 
 	s := &Server{
 		cfg:     cfg,
-		vault:   v,
-		gateway: gateway,
+		localAI: localai.New(),
 		ipfs:    ipfsBridge,
 		kubo:    kuboMgr,
 		author:  auth,
@@ -92,6 +76,9 @@ func New(cfg api.Config) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	if err := s.localAI.Start(ctx); err != nil {
+		log.Printf("local AI start: %v", err)
+	}
 	if _, err := s.kubo.Start(ctx); err != nil {
 		log.Printf("kubo start: %v", err)
 	}
@@ -103,8 +90,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.healthHandler)
-	mux.HandleFunc("/v1/providers", s.providersHandler)
-	mux.HandleFunc("/v1/providers/", s.providerByIDHandler)
+	mux.HandleFunc("/v1/local-ai/status", s.localAIStatusHandler)
 	mux.HandleFunc("/v1/chat", s.chatHandler)
 	mux.HandleFunc("/v1/ipfs/status", s.ipfsStatusHandler)
 	mux.HandleFunc("/v1/ipfs/add", s.ipfsAddHandler)
@@ -146,6 +132,7 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Stop() {
 	s.mesh.Stop()
 	s.kubo.Stop()
+	s.localAI.Stop()
 	if s.httpSrv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

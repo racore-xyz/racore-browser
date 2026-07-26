@@ -1,55 +1,56 @@
 package api
 
 type Config struct {
-	Host               string   `json:"host"`
-	Port               int      `json:"port"`
-	NodeName           string   `json:"nodeName"`
-	MeshEnabled        bool     `json:"meshEnabled"`
-	MeshGroup          string   `json:"meshGroup"`
-	MeshPort           int      `json:"meshPort"`
-	MeshAPIPort        int      `json:"meshApiPort"`
-	MeshHeartbeatSec   int      `json:"meshHeartbeatSeconds"`
-	IPFSAPI            string   `json:"ipfsApi"`
-	IPFSGateway        string   `json:"ipfsGateway"`
-	BootstrapPeers     []string `json:"bootstrapPeers"`
-	DataDir            string   `json:"dataDir"`
-}
-
-type Provider struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	BaseURL     string `json:"baseURL"`
-	DefaultModel string `json:"defaultModel"`
-	Auth        string `json:"auth"`
-	Free        bool   `json:"free"`
-	Local       bool   `json:"local"`
-	Connected   bool   `json:"connected"`
-	MaskedKey   string `json:"maskedKey"`
+	Host             string   `json:"host"`
+	Port             int      `json:"port"`
+	NodeName         string   `json:"nodeName"`
+	MeshEnabled      bool     `json:"meshEnabled"`
+	MeshGroup        string   `json:"meshGroup"`
+	MeshPort         int      `json:"meshPort"`
+	MeshAPIPort      int      `json:"meshApiPort"`
+	MeshHeartbeatSec int      `json:"meshHeartbeatSeconds"`
+	IPFSAPI          string   `json:"ipfsApi"`
+	IPFSGateway      string   `json:"ipfsGateway"`
+	BootstrapPeers   []string `json:"bootstrapPeers"`
+	DataDir          string   `json:"dataDir"`
 }
 
 type ChatRequest struct {
-	Provider string              `json:"provider"`
-	Model    string              `json:"model,omitempty"`
 	Messages []map[string]string `json:"messages"`
 	System   string              `json:"system,omitempty"`
 }
 
+type BrowserAction struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 type ChatResponse struct {
-	Text      string `json:"text"`
-	Usage     any    `json:"usage,omitempty"`
-	Provider  string `json:"provider"`
-	Model     string `json:"model"`
-	LatencyMs int64  `json:"latencyMs"`
-	RawID     string `json:"rawId,omitempty"`
+	Text      string          `json:"text"`
+	Model     string          `json:"model"`
+	Engine    string          `json:"engine"`
+	LatencyMs int64           `json:"latencyMs"`
+	Actions   []BrowserAction `json:"actions,omitempty"`
+}
+
+type LocalAIStatus struct {
+	Ready        bool   `json:"ready"`
+	State        string `json:"state"`
+	Model        string `json:"model"`
+	Label        string `json:"label"`
+	Engine       string `json:"engine"`
+	Parameters   int64  `json:"parameters"`
+	Quantization string `json:"quantization"`
+	LocalOnly    bool   `json:"localOnly"`
+	Error        string `json:"error,omitempty"`
 }
 
 type HealthResponse struct {
-	OK        bool        `json:"ok"`
-	Version   string      `json:"version"`
-	Mesh      any         `json:"mesh,omitempty"`
-	IPFS      any         `json:"ipfs,omitempty"`
-	Providers int         `json:"providers"`
+	OK      bool          `json:"ok"`
+	Version string        `json:"version"`
+	Mesh    any           `json:"mesh,omitempty"`
+	IPFS    any           `json:"ipfs,omitempty"`
+	LocalAI LocalAIStatus `json:"localAI"`
 }
 
 type DomainRecord struct {
