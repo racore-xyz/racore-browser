@@ -18,6 +18,21 @@ test("Rust registers the complete Electron replacement command surface", async (
   }
 });
 
+test("browser windows use one persistent full-featured profile", async () => {
+  const source = await readFile(
+    new URL("../src-tauri/src/windows.rs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /\.join\("browser-profile"\)/);
+  assert.match(source, /\.data_directory\(data_directory\)/);
+  assert.match(source, /\.incognito\(false\)/);
+  assert.match(source, /\.enable_clipboard_access\(\)/);
+  assert.match(source, /\.zoom_hotkeys_enabled\(true\)/);
+  assert.match(source, /\.general_autofill_enabled\(true\)/);
+  assert.match(source, /NewWindowResponse::Allow/);
+});
+
 test("sidecar preparation compiles Go code without touching mesh sources", async () => {
   const source = await readFile(
     new URL("../scripts/prepare-tauri-sidecars.mjs", import.meta.url),

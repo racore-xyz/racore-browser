@@ -4579,6 +4579,16 @@ select:focus-visible {
   border-radius: 14px;
   padding: 25px 28px;
 }
+
+.simple-answer > article.conversation-message.user {
+  border-color: rgba(121, 166, 255, 0.22);
+  background: rgba(31, 51, 82, 0.34);
+}
+
+.follow-up-command {
+  margin: 22px auto 0;
+  max-width: 820px;
+}
 .simple-answer article header {
   display: flex;
   align-items: center;

@@ -15,6 +15,18 @@ type Result = {
   model?: string;
   latencyMs?: number;
 };
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+  latencyMs?: number;
+};
+type BrowserTab = {
+  id: string;
+  title: string;
+  query: string;
+  messages: ChatMessage[];
+};
 type Health = {
   mesh: { online: boolean; peers: number };
   ipfs: { online: boolean };
@@ -26,15 +38,35 @@ const suggestions = [
   "Explain this page's privacy risks",
 ];
 
+const STORAGE_KEY = "racore:browser-tabs:v1";
+
+function createTab(): BrowserTab {
+  return {
+    id:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: "New tab",
+    query: "",
+    messages: [],
+  };
+}
+
 export function AgenticBrowserView() {
-  const [query, setQuery] = useState("");
+  const [tabs, setTabs] = useState<BrowserTab[]>([
+    { id: "initial-tab", title: "New tab", query: "", messages: [] },
+  ]);
+  const [activeTabId, setActiveTabId] = useState("initial-tab");
   const [provider, setProvider] = useState("ollama");
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
-  const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [events, setEvents] = useState<string[]>([]);
+  const [storageReady, setStorageReady] = useState(false);
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+  const query = activeTab?.query ?? "";
+  const messages = activeTab?.messages ?? [];
   const isUrl = useMemo(
     () => /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/.*)?$/i.test(query.trim()),
     [query],
@@ -58,6 +90,81 @@ export function AgenticBrowserView() {
     return () => clearTimeout(initialize);
   }, []);
 
+  useEffect(() => {
+    const restore = setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return;
+        const parsed = JSON.parse(saved) as {
+          tabs?: BrowserTab[];
+          activeTabId?: string;
+        };
+        const restored = parsed.tabs?.filter(
+          (tab) =>
+            typeof tab.id === "string" &&
+            typeof tab.title === "string" &&
+            typeof tab.query === "string" &&
+            Array.isArray(tab.messages),
+        );
+        if (!restored?.length) return;
+        setTabs(restored);
+        setActiveTabId(
+          restored.some((tab) => tab.id === parsed.activeTabId)
+            ? parsed.activeTabId!
+            : restored[0].id,
+        );
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      } finally {
+        setStorageReady(true);
+      }
+    }, 0);
+    return () => clearTimeout(restore);
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ tabs, activeTabId }),
+    );
+  }, [tabs, activeTabId, storageReady]);
+
+  function updateActiveTab(update: (tab: BrowserTab) => BrowserTab) {
+    setTabs((items) =>
+      items.map((tab) => (tab.id === activeTabId ? update(tab) : tab)),
+    );
+  }
+
+  function setQuery(value: string) {
+    updateActiveTab((tab) => ({ ...tab, query: value }));
+  }
+
+  function addTab() {
+    const tab = createTab();
+    setTabs((items) => [...items, tab]);
+    setActiveTabId(tab.id);
+    setError("");
+    setEvents([]);
+  }
+
+  function closeTab(id: string) {
+    if (tabs.length === 1) {
+      const replacement = createTab();
+      setTabs([replacement]);
+      setActiveTabId(replacement.id);
+    } else {
+      const index = tabs.findIndex((tab) => tab.id === id);
+      const remaining = tabs.filter((tab) => tab.id !== id);
+      setTabs(remaining);
+      if (id === activeTabId) {
+        setActiveTabId(remaining[Math.max(0, index - 1)].id);
+      }
+    }
+    setError("");
+    setEvents([]);
+  }
+
   async function submit(event?: FormEvent) {
     event?.preventDefault();
     const input = query.trim();
@@ -73,20 +180,40 @@ export function AgenticBrowserView() {
       return;
     }
     setLoading(true);
-    setResult(null);
     setError("");
     setEvents(["Request accepted by the local Racore daemon"]);
+    const requestMessages = [
+      ...messages.map(({ role, content }) => ({ role, content })),
+      { role: "user" as const, content: input },
+    ];
+    updateActiveTab((tab) => ({
+      ...tab,
+      title: tab.messages.length ? tab.title : input.slice(0, 42),
+      query: "",
+      messages: [...tab.messages, { role: "user", content: input }],
+    }));
     try {
       const response = await daemonRequest<Result>("/v1/chat", {
         method: "POST",
         body: {
           provider,
-          messages: [{ role: "user", content: input }],
+          messages: requestMessages,
           system:
             "You are Racore, a concise agentic browser assistant. Never claim a web action occurred unless a tool confirmed it. Ask for approval before external side effects.",
         },
       });
-      setResult(response);
+      updateActiveTab((tab) => ({
+        ...tab,
+        messages: [
+          ...tab.messages,
+          {
+            role: "assistant",
+            content: response.text,
+            model: response.model || provider,
+            latencyMs: response.latencyMs,
+          },
+        ],
+      }));
       setEvents((items) => [
         ...items,
         `Verified response received from ${response.model || provider}`,
@@ -109,10 +236,30 @@ export function AgenticBrowserView() {
   return (
     <div className="real-browser">
       <div className="real-tabs">
-        <button className="active">
-          <span>◆</span> New tab <i>×</i>
-        </button>
-        <button aria-label="New tab">＋</button>
+        {tabs.map((tab) => (
+          <button
+            className={tab.id === activeTabId ? "active" : ""}
+            key={tab.id}
+            onClick={() => {
+              setActiveTabId(tab.id);
+              setError("");
+              setEvents([]);
+            }}
+          >
+            <span>◆</span> {tab.title}
+            <i
+              role="button"
+              aria-label={`Close ${tab.title}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                closeTab(tab.id);
+              }}
+            >
+              ×
+            </i>
+          </button>
+        ))}
+        <button aria-label="New tab" onClick={addTab}>＋</button>
         <div />
       </div>
       <div className="real-toolbar">
@@ -131,7 +278,7 @@ export function AgenticBrowserView() {
         <button aria-label="Menu">⋮</button>
       </div>
       <main className="real-page">
-        {!result && !loading && !error ? (
+        {!messages.length && !loading && !error ? (
           <section className="simple-home">
             <Image
               src="/brand/racore-logo.png"
@@ -193,36 +340,52 @@ export function AgenticBrowserView() {
             <button
               className="back-home"
               onClick={() => {
-                setResult(null);
+                updateActiveTab((tab) => ({
+                  ...tab,
+                  title: "New tab",
+                  query: "",
+                  messages: [],
+                }));
                 setError("");
                 setEvents([]);
               }}
             >
               ← New task
             </button>
-            <h1>{query}</h1>
-            <article>
-              <header>
-                <span>✦</span>
-                <div>
-                  <b>Racore</b>
-                  <small>
-                    {result?.model || provider}
-                    {result?.latencyMs ? ` · ${result.latencyMs}ms` : ""}
-                  </small>
-                </div>
-              </header>
-              {loading && (
+            <h1>{activeTab.title}</h1>
+            {messages.map((message, messageIndex) => (
+              <article
+                className={`conversation-message ${message.role}`}
+                key={`${message.role}-${messageIndex}`}
+              >
+                <header>
+                  <span>{message.role === "assistant" ? "✦" : "◆"}</span>
+                  <div>
+                    <b>{message.role === "assistant" ? "Racore" : "You"}</b>
+                    {message.role === "assistant" && (
+                      <small>
+                        {message.model || provider}
+                        {message.latencyMs ? ` · ${message.latencyMs}ms` : ""}
+                      </small>
+                    )}
+                  </div>
+                </header>
+                {message.content
+                  .split("\n")
+                  .map((line, index) =>
+                    line.trim() ? <p key={index}>{line}</p> : null,
+                  )}
+              </article>
+            ))}
+            {loading && (
+              <article>
                 <p className="working">
                   Contacting the selected live provider…
                 </p>
-              )}
-              {result?.text
-                .split("\n")
-                .map((line, index) =>
-                  line.trim() ? <p key={index}>{line}</p> : null,
-                )}
-              {error && (
+              </article>
+            )}
+            {error && (
+              <article>
                 <div className="real-error">
                   <b>No response was fabricated.</b>
                   <p>{error}</p>
@@ -236,13 +399,40 @@ export function AgenticBrowserView() {
                     Connect a provider
                   </button>
                 </div>
-              )}
-            </article>
+              </article>
+            )}
             <div className="verified-events">
               {events.map((item) => (
                 <span key={item}>✓ {item}</span>
               ))}
             </div>
+            <form onSubmit={submit} className="simple-command follow-up-command">
+              <textarea
+                rows={2}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Continue the conversation or enter a website…"
+              />
+              <footer>
+                <select
+                  value={provider}
+                  onChange={(event) => setProvider(event.target.value)}
+                  aria-label="AI provider"
+                >
+                  {providers.length ? (
+                    providers.map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.name}
+                        {item.connected ? " · connected" : ""}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="ollama">Ollama · local</option>
+                  )}
+                </select>
+                <button disabled={loading}>↑</button>
+              </footer>
+            </form>
           </section>
         )}
       </main>

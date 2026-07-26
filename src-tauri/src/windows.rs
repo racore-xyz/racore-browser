@@ -1,4 +1,5 @@
 use crate::error::{CommandError, CommandResult};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{webview::NewWindowResponse, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use url::Url;
@@ -29,17 +30,24 @@ pub fn normalize_web_url(raw: &str) -> CommandResult<Url> {
     Ok(url)
 }
 
+/// A single, non-incognito browser profile is shared by every Racore web
+/// window. The platform webview stores cookies, local/session storage,
+/// IndexedDB, cache and service-worker data here, so normal site sign-ins
+/// survive window and application restarts.
+pub fn browser_profile_dir(app: &AppHandle) -> CommandResult<PathBuf> {
+    app.path()
+        .app_data_dir()
+        .map(|directory| directory.join("browser-profile"))
+        .map_err(|error| CommandError::backend(error.to_string()))
+}
+
 pub fn open_browser_window(app: &AppHandle, raw: &str) -> CommandResult<bool> {
     let url = normalize_web_url(raw)?;
     let label = format!(
         "browser-{}",
         NEXT_BROWSER_WINDOW.fetch_add(1, Ordering::Relaxed)
     );
-    let data_directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| CommandError::backend(error.to_string()))?
-        .join("webview-racore");
+    let data_directory = browser_profile_dir(app)?;
     std::fs::create_dir_all(&data_directory)
         .map_err(|error| CommandError::backend(error.to_string()))?;
 
@@ -47,8 +55,26 @@ pub fn open_browser_window(app: &AppHandle, raw: &str) -> CommandResult<bool> {
         .title("Racore Web")
         .inner_size(1280.0, 820.0)
         .data_directory(data_directory)
+        .incognito(false)
+        .enable_clipboard_access()
+        .zoom_hotkeys_enabled(true)
+        .general_autofill_enabled(true)
         .on_navigation(|next| matches!(next.scheme(), "http" | "https"))
-        .on_new_window(|_, _| NewWindowResponse::Deny)
+        // Let the webview engine create target=_blank/OAuth windows. They
+        // inherit the same browser profile and therefore the same login.
+        .on_new_window(|next, _| {
+            if matches!(next.scheme(), "http" | "https") {
+                NewWindowResponse::Allow
+            } else {
+                NewWindowResponse::Deny
+            }
+        })
+        .on_document_title_changed(|window, title| {
+            let title = title.trim();
+            if !title.is_empty() {
+                let _ = window.set_title(title);
+            }
+        })
         .build()
         .map_err(|error| CommandError::backend(error.to_string()))?;
     Ok(true)
