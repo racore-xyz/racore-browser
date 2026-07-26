@@ -23,7 +23,7 @@ const (
 	ModelID     = "MadeAgents/Hammer2.0-0.5b"
 	ModelLabel  = "Hammer 2.0 0.5B"
 	Engine      = "llama.cpp"
-	defaultPort = 47833
+	defaultPort = 47834
 )
 
 type Manager struct {
