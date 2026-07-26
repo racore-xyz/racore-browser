@@ -33,6 +33,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Racore",
+    "copyright": "Copyright © 2026 Racore. All rights reserved.",
+    "license": "LicenseRef-Racore-NonCommercial-1.0",
+    "licenseFile": "licenses/INSTALLER-LICENSE.txt",
+    "category": "Productivity",
+    "shortDescription": "Private local-first agentic browser",
+    "longDescription": "Racore Browser combines normal browsing, Racore Mesh domains, local AI planning, signed publishing, and IPFS in one private desktop workspace.",
     "externalBin": ["binaries/racored", "binaries/racore"],
     "icon": [
       "icons/32x32.png",
@@ -43,7 +50,16 @@
     ],
     "windows": {
       "nsis": {
-        "installMode": "perMachine"
+        "installMode": "perMachine",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "windows/nsis/header.bmp",
+        "uninstallerHeaderImage": "windows/nsis/header.bmp",
+        "sidebarImage": "windows/nsis/sidebar.bmp",
+        "startMenuFolder": "Racore",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
       }
     }
   }

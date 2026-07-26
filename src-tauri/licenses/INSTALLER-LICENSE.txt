@@ -1,0 +1,63 @@
+RACORE BROWSER EVALUATION LICENSE
+Version 1.0 - Non-Commercial Use
+
+Copyright (c) 2026 Racore. All rights reserved.
+
+Racore Browser is provided for personal evaluation, research, development,
+testing, education, and other non-commercial use. You may install and use this
+build on devices you control for those purposes.
+
+You may not sell, sublicense, rent, commercially host, or redistribute this
+Racore Browser build as part of a paid product or service without prior written
+permission from Racore.
+
+THE RACORE BROWSER APPLICATION IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+SYSTEM INFORMATION
+
+Product: Racore Browser
+Version: 0.1.0
+Supported installer architecture: Windows x64
+Application shell: Tauri + Microsoft WebView2
+Local control plane: racored (Go)
+Local AI model: MadeAgents/Hammer2.0-0.5b, Q8_0
+Local inference engine: llama.cpp, CPU-first
+Local storage and publishing: IPFS Kubo
+Network: Racore Mesh and signed Racore domains
+AI privacy: no cloud inference provider or API key is required
+
+THIRD-PARTY SOFTWARE NOTICES
+
+The non-commercial restriction above applies to the Racore Browser application
+code and branding. It does not replace, narrow, or relicense third-party
+components. Each third-party component remains available under its own terms.
+
+1. MadeAgents/Hammer2.0-0.5b
+   License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   Source: https://huggingface.co/MadeAgents/Hammer2.0-0.5b
+   This installer uses a Q8_0 GGUF conversion published by Nekuromento.
+
+2. Qwen 2.5 model family
+   Hammer 2.0 is derived from Qwen/Qwen2.5-0.5B-Instruct.
+   Source: https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct
+   Applicable upstream notices and attribution are retained.
+
+3. llama.cpp
+   Copyright (c) the llama.cpp contributors
+   License: MIT
+   Source: https://github.com/ggml-org/llama.cpp
+
+4. IPFS Kubo
+   Copyright (c) Protocol Labs and Kubo contributors
+   Licenses: Apache License 2.0 and MIT, as distributed with Kubo
+   Source: https://github.com/ipfs/kubo
+
+5. Tauri
+   Copyright (c) Tauri Programme within The Commons Conservancy
+   Licenses: Apache License 2.0 and MIT
+   Source: https://github.com/tauri-apps/tauri
+
+Complete license texts and source notices remain available from the listed
+upstream projects and the Racore source distribution.
