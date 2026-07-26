@@ -31,9 +31,9 @@ pub fn normalize_web_url(raw: &str) -> CommandResult<Url> {
 }
 
 /// A single, non-incognito browser profile is shared by every Racore web
-/// window. The platform webview stores cookies, local/session storage,
-/// IndexedDB, cache and service-worker data here, so normal site sign-ins
-/// survive window and application restarts.
+/// window. The platform webview stores persistent cookies, local storage,
+/// IndexedDB, cache and service-worker data here, so site sign-ins that issue
+/// persistent credentials survive window and application restarts.
 pub fn browser_profile_dir(app: &AppHandle) -> CommandResult<PathBuf> {
     app.path()
         .app_data_dir()
