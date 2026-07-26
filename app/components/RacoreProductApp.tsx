@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AgenticBrowserView } from "./AgenticBrowserView";
 import { LiveNetworkView } from "./LiveNetworkView";
@@ -11,14 +10,25 @@ import { daemonRequest } from "../lib/racore-client";
 import { desktopBridge, isDesktopApp } from "../lib/desktop";
 
 type View = "browser" | "sites" | "providers" | "network" | "system";
+type WorkspaceSpace = {
+  id: string;
+  label: string;
+  icon: string;
+};
 
 const navigation: { id: View; icon: string; label: string }[] = [
-  { id: "browser", icon: "⌕", label: "Browser" },
+  { id: "browser", icon: "⌂", label: "Browser" },
   { id: "sites", icon: "◇", label: "Sites" },
   { id: "providers", icon: "✦", label: "AI" },
   { id: "network", icon: "◎", label: "Network" },
   { id: "system", icon: "⚙", label: "System" },
 ];
+const DEFAULT_SPACES: WorkspaceSpace[] = [
+  { id: "work", label: "Work", icon: "▣" },
+  { id: "play", label: "Play", icon: "◉" },
+  { id: "build", label: "Build", icon: "◆" },
+];
+const SPACES_STORAGE_KEY = "racore:workspace-spaces:v1";
 
 function SystemView() {
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
@@ -59,11 +69,38 @@ function SystemView() {
 export function RacoreProductApp() {
   const [view, setView] = useState<View>("browser");
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [spaces, setSpaces] = useState<WorkspaceSpace[]>(DEFAULT_SPACES);
+  const [activeSpaceId, setActiveSpaceId] = useState("work");
+  const [spacesReady, setSpacesReady] = useState(false);
+  const [clock, setClock] = useState("");
 
   useEffect(() => {
     const initialize = setTimeout(() => {
       const force = new URLSearchParams(window.location.search).get("onboarding") === "1";
       setOnboarded(!force && Boolean(localStorage.getItem("racore:onboarded")));
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem(SPACES_STORAGE_KEY) || "null",
+        ) as { spaces?: WorkspaceSpace[]; activeSpaceId?: string } | null;
+        const restored = saved?.spaces?.filter(
+          (space) =>
+            typeof space.id === "string" &&
+            typeof space.label === "string" &&
+            typeof space.icon === "string",
+        );
+        if (restored?.length) {
+          setSpaces(restored);
+          setActiveSpaceId(
+            restored.some((space) => space.id === saved?.activeSpaceId)
+              ? saved!.activeSpaceId!
+              : restored[0].id,
+          );
+        }
+      } catch {
+        localStorage.removeItem(SPACES_STORAGE_KEY);
+      } finally {
+        setSpacesReady(true);
+      }
     }, 0);
     const openProviders = () => setView("providers");
     window.addEventListener("racore:open-providers", openProviders);
@@ -73,23 +110,134 @@ export function RacoreProductApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!spacesReady) return;
+    localStorage.setItem(
+      SPACES_STORAGE_KEY,
+      JSON.stringify({ spaces, activeSpaceId }),
+    );
+  }, [spaces, activeSpaceId, spacesReady]);
+
+  useEffect(() => {
+    function updateClock() {
+      setClock(
+        new Intl.DateTimeFormat(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date()),
+      );
+    }
+    const initial = setTimeout(updateClock, 0);
+    const timer = setInterval(updateClock, 30_000);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(timer);
+    };
+  }, []);
+
+  function addSpace() {
+    const number = spaces.length + 1;
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `space-${Date.now()}`;
+    const space = { id, label: `Space ${number}`, icon: "◌" };
+    setSpaces((items) => [...items, space]);
+    setActiveSpaceId(space.id);
+    setView("browser");
+  }
+
   if (onboarded === null) return <main className="racore-loading"><span className="brand-mark"><i /><i /><i /><i /></span></main>;
   if (!onboarded) return <Onboarding onFinish={() => { localStorage.setItem("racore:onboarded", "1"); setOnboarded(true); }} />;
 
+  const activeSpace =
+    spaces.find((space) => space.id === activeSpaceId) ?? spaces[0];
+
   return (
-    <main className="browser-app">
-      <aside className="utility-rail">
-        <div className="rail-logo"><Image src="/brand/racore-logo.png" alt="Racore" width={170} height={43} /></div>
-        <nav>{navigation.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)} title={item.label}><i>{item.icon}</i><span>{item.label}</span></button>)}</nav>
-        <button className="reopen-onboarding" onClick={() => setOnboarded(false)} title="Open onboarding">?</button>
-      </aside>
-      <section className="workspace-shell">
-        {view === "browser" && <AgenticBrowserView />}
-        {view === "sites" && <SitesView />}
-        {view === "providers" && <ProvidersView />}
-        {view === "network" && <LiveNetworkView />}
-        {view === "system" && <SystemView />}
+    <main className="browser-app workspace-os">
+      <header className="workspace-menubar">
+        <div className="workspace-brand">
+          <span className="window-lights"><i /><i /><i /></span>
+          <b><i>◆</i> RACORE</b>
+        </div>
+        <nav className="workspace-spaces" aria-label="Spaces">
+          {spaces.map((space) => (
+            <button
+              key={space.id}
+              className={space.id === activeSpaceId ? "active" : ""}
+              onClick={() => {
+                setActiveSpaceId(space.id);
+                setView("browser");
+              }}
+              title={`${space.label} tab cluster`}
+            >
+              <i>{space.icon}</i>
+              <span>{space.label}</span>
+              <small>
+                {space.id === activeSpaceId ? "Active cluster" : "Space"}
+              </small>
+            </button>
+          ))}
+          <button className="add-workspace-space" onClick={addSpace} title="Add space">
+            ＋
+          </button>
+        </nav>
+        <div className="workspace-system">
+          <span><i /> Mesh</span>
+          <b>{clock}</b>
+          <button onClick={() => setView("system")} aria-label="Workspace settings">⚙</button>
+          <button onClick={() => setOnboarded(false)} aria-label="Open onboarding">?</button>
+        </div>
+      </header>
+
+      <section className="workspace-stage">
+        <div className="workspace-glow glow-one" />
+        <div className="workspace-glow glow-two" />
+        <section className="workspace-shell">
+          <header className="workspace-window-title">
+            <div>
+              <i>{activeSpace.icon}</i>
+              <span>
+                <b>{activeSpace.label}</b>
+                <small>{navigation.find((item) => item.id === view)?.label}</small>
+              </span>
+            </div>
+            <span>Racore Workspace</span>
+          </header>
+          <div className="workspace-view">
+            {view === "browser" && (
+              <AgenticBrowserView
+                spaceId={activeSpace.id}
+                spaceLabel={activeSpace.label}
+              />
+            )}
+            {view === "sites" && <SitesView />}
+            {view === "providers" && <ProvidersView />}
+            {view === "network" && <LiveNetworkView />}
+            {view === "system" && <SystemView />}
+          </div>
+        </section>
       </section>
+
+      <nav className="workspace-dock" aria-label="Workspace apps">
+        <span className="dock-racore">R</span>
+        {navigation.map((item) => (
+          <button
+            key={item.id}
+            className={view === item.id ? "active" : ""}
+            onClick={() => setView(item.id)}
+            title={item.label}
+          >
+            <i>{item.icon}</i>
+            <small>{item.label}</small>
+          </button>
+        ))}
+        <i className="dock-divider" />
+        <button onClick={addSpace} title="New space">
+          <i>＋</i>
+          <small>Space</small>
+        </button>
+      </nav>
     </main>
   );
 }
