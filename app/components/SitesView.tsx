@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { daemonRequest } from "../lib/racore-client";
+import { racoreDomainFromInput } from "../lib/racore-domains";
 
 type Release = {
   version: string;
@@ -40,8 +41,11 @@ export function SitesView() {
   }, []);
 
   async function claim() {
-    const normalized = domain.toLowerCase().trim();
-    if (!normalized) return;
+    const normalized = racoreDomainFromInput(domain);
+    if (!normalized) {
+      setMessage("Use a valid .racore, .rac, .core, or .ra domain.");
+      return;
+    }
     setBusy(true);
     try {
       const availability = await daemonRequest<{ available: boolean }>(
@@ -66,13 +70,13 @@ export function SitesView() {
   }
 
   const command =
-    "racore publish --domain app.example.com --build ./dist --version 1.0.0";
+    "racore publish --domain app.racore --build ./dist --version 1.0.0";
   return (
     <div className="screen sites-real">
       <div className="screen-head">
         <div>
           <h1>Sites</h1>
-          <p>Claim a domain and publish signed framework builds to IPFS.</p>
+          <p>Claim a Racore network domain and publish signed builds to IPFS.</p>
         </div>
         <button className="secondary" onClick={refresh}>
           ↻ Refresh
@@ -102,7 +106,7 @@ export function SitesView() {
           <input
             value={domain}
             onChange={(event) => setDomain(event.target.value)}
-            placeholder="app.example.com"
+            placeholder="app.racore"
           />
           <button disabled={busy}>
             {busy ? "Checking…" : "Check & claim"}

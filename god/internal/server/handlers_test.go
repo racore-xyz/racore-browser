@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/racore/god/internal/authority"
 	"github.com/racore/god/pkg/api"
 )
 
@@ -25,6 +26,7 @@ func setupTestServer(t *testing.T) *Server {
 		NodeName:         "Test",
 		MeshEnabled:      false,
 		MeshHeartbeatSec: 300,
+		IPFSGateway:      "http://127.0.0.1:8180",
 	}
 	return New(cfg)
 }
@@ -153,6 +155,40 @@ func TestDomainAvailableHandler(t *testing.T) {
 	json.NewDecoder(w3.Body).Decode(&avail2)
 	if a, _ := avail2["available"].(bool); !a {
 		t.Fatal("free.com should be available")
+	}
+}
+
+func TestNetworkDomainCatalogAndResolver(t *testing.T) {
+	s := setupTestServer(t)
+	info, _, err := s.author.Create("demo.ra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info.Releases = append(info.Releases, authority.ReleaseEntry{
+		ReleaseID: "rcp2-demo",
+		Manifest: api.ReleaseManifest{
+			Domain: "demo.ra", CID: "bafybeigdyrztabcdefghijklmnop",
+			CreatedAt: 100,
+		},
+	})
+
+	list := httptest.NewRecorder()
+	s.networkDomainsHandler(list, httptest.NewRequest("GET", "/v1/authority/network-domains", nil))
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "demo.ra") {
+		t.Fatalf("unexpected network catalog: %d %s", list.Code, list.Body.String())
+	}
+
+	resolve := httptest.NewRecorder()
+	s.resolveDomainHandler(resolve, httptest.NewRequest("GET", "/v1/authority/resolve/demo.ra", nil))
+	if resolve.Code != http.StatusOK {
+		t.Fatalf("unexpected resolve response: %d %s", resolve.Code, resolve.Body.String())
+	}
+	var result map[string]any
+	if err := json.NewDecoder(resolve.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["gatewayUrl"] != "http://127.0.0.1:8180/ipfs/bafybeigdyrztabcdefghijklmnop/" {
+		t.Fatalf("unexpected gateway URL: %v", result["gatewayUrl"])
 	}
 }
 
@@ -294,5 +330,3 @@ func TestWriteError(t *testing.T) {
 		t.Fatalf("expected 'not found', got '%s'", result["detail"])
 	}
 }
-
-

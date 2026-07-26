@@ -233,6 +233,33 @@ func (s *Server) domainsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) networkDomainsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		writeError(w, 405, "method not allowed")
+		return
+	}
+	writeJSON(w, 200, s.author.NetworkDomains())
+}
+
+func (s *Server) resolveDomainHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		writeError(w, 405, "method not allowed")
+		return
+	}
+	domain := strings.TrimPrefix(r.URL.Path, "/v1/authority/resolve/")
+	resolved, err := s.author.ResolveNetworkDomain(domain)
+	if err != nil {
+		writeError(w, 404, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"domain": resolved.Domain, "controller": resolved.Controller,
+		"source": resolved.Source, "nodeId": resolved.NodeID,
+		"releaseId": resolved.ReleaseID, "cid": resolved.CID,
+		"gatewayUrl": strings.TrimRight(s.cfg.IPFSGateway, "/") + "/ipfs/" + resolved.CID + "/",
+	})
+}
+
 func (s *Server) domainByIDHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/v1/authority/domains/")
 	parts := strings.Split(path, "/")

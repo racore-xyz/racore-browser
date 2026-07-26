@@ -67,12 +67,21 @@ func New(cfg api.Config) *Server {
 
 	mn.SetEventSink(func(ev map[string]any) {
 		if t, _ := ev["type"].(string); t == "mesh.message" {
-			if mt, _ := ev["messageType"].(string); mt == "domain.claim" {
+			mt, _ := ev["messageType"].(string)
+			if mt == "domain.claim" {
 				if data, ok := ev["data"].(map[string]any); ok {
 					domain, _ := data["domain"].(string)
 					controller, _ := data["controller"].(string)
 					nodeID, _ := ev["nodeId"].(string)
 					auth.ObserveClaim(domain, controller, nodeID)
+				}
+			} else if mt == "release.available" {
+				if data, ok := ev["data"].(map[string]any); ok {
+					domain, _ := data["domain"].(string)
+					releaseID, _ := data["releaseId"].(string)
+					cid, _ := data["cid"].(string)
+					nodeID, _ := ev["nodeId"].(string)
+					auth.ObserveRelease(domain, releaseID, cid, nodeID)
 				}
 			}
 		}
@@ -105,15 +114,17 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/mesh/broadcast", s.meshBroadcastHandler)
 	mux.HandleFunc("/v1/authority/domains", s.domainsHandler)
 	mux.HandleFunc("/v1/authority/domains/", s.domainByIDHandler)
+	mux.HandleFunc("/v1/authority/network-domains", s.networkDomainsHandler)
+	mux.HandleFunc("/v1/authority/resolve/", s.resolveDomainHandler)
 	mux.HandleFunc("/v1/events", s.wsHandler)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.httpSrv = &http.Server{
 		Addr:         addr,
-		Handler:     corsMiddleware(mux),
-		ReadTimeout: 10 * time.Second,
+		Handler:      corsMiddleware(mux),
+		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 120 * time.Second,
-		IdleTimeout: 120 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	errCh := make(chan error, 1)

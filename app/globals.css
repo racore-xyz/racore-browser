@@ -4363,6 +4363,120 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
 }
+
+.browser-mode-switch {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(6, 12, 22, 0.94);
+}
+
+.browser-mode-switch button {
+  display: grid;
+  grid-template-columns: 30px auto;
+  grid-template-rows: auto auto;
+  min-width: 190px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+}
+
+.browser-mode-switch button > span {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #55c8ff;
+}
+
+.browser-mode-switch button b {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.browser-mode-switch button small {
+  font-size: 10px;
+}
+
+.browser-mode-switch button.active {
+  border-color: rgba(55, 179, 255, 0.35);
+  background: rgba(34, 113, 191, 0.18);
+  box-shadow: inset 0 0 18px rgba(44, 139, 255, 0.08);
+}
+
+.browser-mode-copy {
+  max-width: 620px;
+  margin: -10px auto 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.network-domain-shelf {
+  width: min(780px, 100%);
+  margin-top: 22px;
+  padding: 15px;
+  border: 1px solid rgba(79, 179, 255, 0.16);
+  border-radius: 16px;
+  background: rgba(7, 16, 29, 0.62);
+}
+
+.network-domain-shelf > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.network-domain-shelf > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.network-domain-shelf > header small,
+.network-domain-shelf > header > span,
+.network-domain-shelf > div > p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.network-domain-shelf > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.network-domain-shelf > div > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.035);
+  text-align: left;
+}
+
+.network-domain-shelf > div > button:hover {
+  border-color: rgba(78, 185, 255, 0.34);
+  background: rgba(57, 137, 220, 0.1);
+}
+
+.network-domain-shelf button i {
+  color: #53c7ff;
+}
+
+.network-domain-shelf button span {
+  display: grid;
+  gap: 2px;
+}
+
+.network-domain-shelf button small {
+  color: var(--muted);
+  font-size: 10px;
+}
 .real-tabs {
   height: 39px;
   display: flex;

@@ -8,6 +8,7 @@ import {
   ProviderInfo,
 } from "../lib/racore-client";
 import { desktopBridge, isDesktopApp } from "../lib/desktop";
+import { racoreDomainFromInput } from "../lib/racore-domains";
 
 type Result = {
   text: string;
@@ -32,6 +33,19 @@ type Health = {
   mesh: { online: boolean; peers: number };
   ipfs: { online: boolean };
 };
+type BrowserMode = "racore" | "web";
+type NetworkDomain = {
+  domain: string;
+  controller: string;
+  source: "local" | "mesh";
+  nodeId?: string;
+  releaseId?: string;
+  cid?: string;
+  updatedAt: number;
+};
+type ResolvedDomain = NetworkDomain & {
+  gatewayUrl: string;
+};
 
 const suggestions = [
   "Research a topic with my connected model",
@@ -40,6 +54,7 @@ const suggestions = [
 ];
 
 const STORAGE_KEY = "racore:browser-tabs:v1";
+const MODE_STORAGE_KEY = "racore:browser-mode:v1";
 const DIRECT_VIDEO_PATTERN = /\.(mp4|webm|ogv|ogg)(?:[?#].*)?$/i;
 
 function isDirectVideoUrl(value: string): boolean {
@@ -78,6 +93,8 @@ export function AgenticBrowserView() {
   const [error, setError] = useState("");
   const [events, setEvents] = useState<string[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [mode, setMode] = useState<BrowserMode>("racore");
+  const [networkDomains, setNetworkDomains] = useState<NetworkDomain[]>([]);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const query = activeTab?.query ?? "";
   const messages = activeTab?.messages ?? [];
@@ -98,6 +115,15 @@ export function AgenticBrowserView() {
         setHealth(state);
         const connected = catalog.find((item) => item.connected);
         if (connected) setProvider(connected.id);
+        try {
+          setNetworkDomains(
+            await daemonRequest<NetworkDomain[]>(
+              "/v1/authority/network-domains",
+            ),
+          );
+        } catch {
+          setNetworkDomains([]);
+        }
       } catch {
         setHealth(null);
       }
@@ -109,6 +135,10 @@ export function AgenticBrowserView() {
     const restore = setTimeout(() => {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
+        const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
+        if (savedMode === "racore" || savedMode === "web") {
+          setMode(savedMode);
+        }
         if (!saved) return;
         const parsed = JSON.parse(saved) as {
           tabs?: BrowserTab[];
@@ -144,7 +174,8 @@ export function AgenticBrowserView() {
       STORAGE_KEY,
       JSON.stringify({ tabs, activeTabId }),
     );
-  }, [tabs, activeTabId, storageReady]);
+    localStorage.setItem(MODE_STORAGE_KEY, mode);
+  }, [tabs, activeTabId, mode, storageReady]);
 
   function updateActiveTab(update: (tab: BrowserTab) => BrowserTab) {
     setTabs((items) =>
@@ -185,7 +216,46 @@ export function AgenticBrowserView() {
     event?.preventDefault();
     const input = query.trim();
     if (!input) return;
+    const racoreDomain = racoreDomainFromInput(input);
+    if (racoreDomain) {
+      setLoading(true);
+      setError("");
+      setEvents([`Resolving ${racoreDomain} on the active Racore Mesh`]);
+      try {
+        const resolved = await daemonRequest<ResolvedDomain>(
+          `/v1/authority/resolve/${encodeURIComponent(racoreDomain)}`,
+        );
+        updateActiveTab((tab) => ({
+          ...tab,
+          title: racoreDomain,
+          query: "",
+          messages: [],
+          mediaUrl: undefined,
+        }));
+        setMode("racore");
+        setEvents([
+          `Resolved ${racoreDomain}`,
+          `${resolved.source === "local" ? "Local authority" : "Mesh peer"} · ${resolved.cid}`,
+        ]);
+        if (isDesktopApp()) await desktopBridge.openBrowser(resolved.gatewayUrl);
+        else window.open(resolved.gatewayUrl, "_blank", "noopener,noreferrer");
+      } catch (cause) {
+        setError(
+          cause instanceof Error ? cause.message : "Racore domain resolution failed.",
+        );
+        setEvents(["Resolution stopped without an unverified fallback"]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (isUrl) {
+      if (mode === "racore") {
+        setError(
+          "This is a public-web address. Switch to Normal Browsing to open it.",
+        );
+        return;
+      }
       const normalized = /^https?:/i.test(input) ? input : `https://${input}`;
       if (isDirectVideoUrl(normalized)) {
         const videoUrl = new URL(normalized);
@@ -210,6 +280,12 @@ export function AgenticBrowserView() {
           "_blank",
           "noopener,noreferrer",
         );
+      return;
+    }
+    if (mode === "web") {
+      const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(input)}`;
+      if (isDesktopApp()) await desktopBridge.openBrowser(searchUrl);
+      else window.open(searchUrl, "_blank", "noopener,noreferrer");
       return;
     }
     setLoading(true);
@@ -269,6 +345,30 @@ export function AgenticBrowserView() {
 
   return (
     <div className="real-browser">
+      <div className="browser-mode-switch" aria-label="Browser mode">
+        <button
+          className={mode === "racore" ? "active" : ""}
+          onClick={() => {
+            setMode("racore");
+            setError("");
+          }}
+        >
+          <span>◆</span>
+          <b>Racore Mode</b>
+          <small>AI + mesh domains</small>
+        </button>
+        <button
+          className={mode === "web" ? "active" : ""}
+          onClick={() => {
+            setMode("web");
+            setError("");
+          }}
+        >
+          <span>◎</span>
+          <b>Normal Browsing</b>
+          <small>Public web + search</small>
+        </button>
+      </div>
       <div className="real-tabs">
         {tabs.map((tab) => (
           <button
@@ -305,7 +405,11 @@ export function AgenticBrowserView() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search, ask Racore, or enter an address"
+            placeholder={
+              mode === "racore"
+                ? "Ask Racore or enter a .racore / .rac / .core / .ra domain"
+                : "Search the web or enter an address"
+            }
           />
           <button aria-label="Go">↗</button>
         </form>
@@ -358,12 +462,21 @@ export function AgenticBrowserView() {
               priority
             />
             <h1>Browse. Ask. Act with approval.</h1>
+            <p className="browser-mode-copy">
+              {mode === "racore"
+                ? "Private AI workspace and signed sites discovered across your Racore Mesh."
+                : "A familiar browser profile for public websites, searches, media, and logins."}
+            </p>
             <form onSubmit={submit} className="simple-command">
               <textarea
                 rows={3}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Ask a question or enter a website…"
+                placeholder={
+                  mode === "racore"
+                    ? "Ask a question or enter a website (.racore / .rac / .core / .ra)…"
+                    : "Search or enter a public website…"
+                }
               />
               <footer>
                 <select
@@ -392,6 +505,44 @@ export function AgenticBrowserView() {
                 </button>
               ))}
             </div>
+            {mode === "racore" && (
+              <section className="network-domain-shelf">
+                <header>
+                  <div>
+                    <b>Ready on your network</b>
+                    <small>
+                      .racore · .rac · .core · .ra
+                    </small>
+                  </div>
+                  <span>{networkDomains.filter((item) => item.cid).length} live</span>
+                </header>
+                <div>
+                  {networkDomains.filter((item) => item.cid).length ? (
+                    networkDomains
+                      .filter((item) => item.cid)
+                      .slice(0, 8)
+                      .map((item) => (
+                        <button
+                          key={item.domain}
+                          onClick={() => setQuery(item.domain)}
+                        >
+                          <i>{item.source === "local" ? "◆" : "◎"}</i>
+                          <span>
+                            <b>{item.domain}</b>
+                            <small>
+                              {item.source === "local" ? "This device" : "Mesh peer"}
+                            </small>
+                          </span>
+                        </button>
+                      ))
+                  ) : (
+                    <p>
+                      No published Racore domains have been discovered yet.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
             <div className="live-core-status">
               <span className={health?.mesh.online ? "up" : "down"}>
                 ● Mesh{" "}

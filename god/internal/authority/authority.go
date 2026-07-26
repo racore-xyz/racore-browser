@@ -29,24 +29,25 @@ type DelegateGrant struct {
 }
 
 type DomainInfo struct {
-	Domain     string           `json:"domain"`
-	Controller string           `json:"controller"`
-	CreatedAt  int64            `json:"createdAt"`
-	Delegates  []DelegateGrant  `json:"delegates"`
-	Releases   []ReleaseEntry   `json:"releases"`
+	Domain     string          `json:"domain"`
+	Controller string          `json:"controller"`
+	CreatedAt  int64           `json:"createdAt"`
+	Delegates  []DelegateGrant `json:"delegates"`
+	Releases   []ReleaseEntry  `json:"releases"`
 }
 
 type ReleaseEntry struct {
-	Manifest api.ReleaseManifest `json:"manifest"`
-	ReleaseID string            `json:"releaseId"`
+	Manifest  api.ReleaseManifest `json:"manifest"`
+	ReleaseID string              `json:"releaseId"`
 }
 
 type Authority struct {
-	mu        sync.RWMutex
-	dataDir   string
-	path      string
-	domains   map[string]*DomainInfo
-	observed  map[string]ObservedClaim
+	mu               sync.RWMutex
+	dataDir          string
+	path             string
+	domains          map[string]*DomainInfo
+	observed         map[string]ObservedClaim
+	observedReleases map[string]ObservedRelease
 }
 
 type ObservedClaim struct {
@@ -56,12 +57,33 @@ type ObservedClaim struct {
 	Timestamp  int64  `json:"timestamp"`
 }
 
+type ObservedRelease struct {
+	Domain    string `json:"domain"`
+	ReleaseID string `json:"releaseId"`
+	CID       string `json:"cid"`
+	NodeID    string `json:"nodeId"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type NetworkDomain struct {
+	Domain     string `json:"domain"`
+	Controller string `json:"controller"`
+	Source     string `json:"source"`
+	NodeID     string `json:"nodeId,omitempty"`
+	ReleaseID  string `json:"releaseId,omitempty"`
+	CID        string `json:"cid,omitempty"`
+	UpdatedAt  int64  `json:"updatedAt"`
+}
+
+var racoreSuffixes = []string{".racore", ".rac", ".core", ".ra"}
+
 func New(dataDir string) *Authority {
 	return &Authority{
-		dataDir:  dataDir,
-		path:     filepath.Join(dataDir, "authorities.json"),
-		domains:  make(map[string]*DomainInfo),
-		observed: make(map[string]ObservedClaim),
+		dataDir:          dataDir,
+		path:             filepath.Join(dataDir, "authorities.json"),
+		domains:          make(map[string]*DomainInfo),
+		observed:         make(map[string]ObservedClaim),
+		observedReleases: make(map[string]ObservedRelease),
 	}
 }
 
@@ -78,8 +100,9 @@ func (a *Authority) Load() error {
 	}
 
 	var store struct {
-		Domains  map[string]*DomainInfo `json:"domains"`
-		Observed map[string]ObservedClaim `json:"observed"`
+		Domains          map[string]*DomainInfo     `json:"domains"`
+		Observed         map[string]ObservedClaim   `json:"observed"`
+		ObservedReleases map[string]ObservedRelease `json:"observedReleases"`
 	}
 	if err := json.Unmarshal(data, &store); err != nil {
 		return err
@@ -90,19 +113,41 @@ func (a *Authority) Load() error {
 	if store.Observed != nil {
 		a.observed = store.Observed
 	}
+	if store.ObservedReleases != nil {
+		a.observedReleases = store.ObservedReleases
+	}
 	return nil
 }
 
 func (a *Authority) save() error {
 	store := map[string]any{
-		"domains":  a.domains,
-		"observed": a.observed,
+		"domains":          a.domains,
+		"observed":         a.observed,
+		"observedReleases": a.observedReleases,
 	}
 	data, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {
 		return err
 	}
 	return writeFileAtomic(a.path, data, 0600)
+}
+
+func IsRacoreDomain(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(strings.Trim(domain, ".")))
+	if len(domain) < 4 || len(domain) > 253 || strings.Contains(domain, "..") {
+		return false
+	}
+	for _, char := range domain {
+		if !((char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '.') {
+			return false
+		}
+	}
+	for _, suffix := range racoreSuffixes {
+		if strings.HasSuffix(domain, suffix) && len(domain) > len(suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
@@ -213,6 +258,88 @@ func (a *Authority) ObserveClaim(domain, controller, nodeID string) {
 			log.Printf("authority: save after observe %s: %v", domain, err)
 		}
 	}
+}
+
+func (a *Authority) ObserveRelease(domain, releaseID, cid, nodeID string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	domain = strings.ToLower(strings.Trim(domain, "."))
+	if !IsRacoreDomain(domain) || !safeCID(cid) {
+		return
+	}
+	a.observedReleases[domain] = ObservedRelease{
+		Domain: domain, ReleaseID: releaseID, CID: cid,
+		NodeID: nodeID, Timestamp: time.Now().UnixMilli(),
+	}
+	if err := a.save(); err != nil {
+		log.Printf("authority: save after observed release %s: %v", domain, err)
+	}
+}
+
+func (a *Authority) NetworkDomains() []NetworkDomain {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make([]NetworkDomain, 0, len(a.domains)+len(a.observed))
+	for domain, info := range a.domains {
+		if !IsRacoreDomain(domain) {
+			continue
+		}
+		item := NetworkDomain{
+			Domain: domain, Controller: info.Controller,
+			Source: "local", UpdatedAt: info.CreatedAt,
+		}
+		if len(info.Releases) > 0 {
+			release := info.Releases[len(info.Releases)-1]
+			item.ReleaseID = release.ReleaseID
+			item.CID = release.Manifest.CID
+			item.UpdatedAt = release.Manifest.CreatedAt
+		}
+		out = append(out, item)
+	}
+	for domain, claim := range a.observed {
+		if !IsRacoreDomain(domain) {
+			continue
+		}
+		item := NetworkDomain{
+			Domain: domain, Controller: claim.Controller,
+			Source: "mesh", NodeID: claim.NodeID, UpdatedAt: claim.Timestamp,
+		}
+		if release, ok := a.observedReleases[domain]; ok {
+			item.ReleaseID = release.ReleaseID
+			item.CID = release.CID
+			item.UpdatedAt = release.Timestamp
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func (a *Authority) ResolveNetworkDomain(domain string) (*NetworkDomain, error) {
+	domain = strings.ToLower(strings.Trim(domain, "."))
+	if !IsRacoreDomain(domain) {
+		return nil, fmt.Errorf("unsupported Racore domain")
+	}
+	for _, item := range a.NetworkDomains() {
+		if item.Domain == domain {
+			if item.CID == "" {
+				return nil, fmt.Errorf("domain has no published release")
+			}
+			return &item, nil
+		}
+	}
+	return nil, fmt.Errorf("domain not found on the active known mesh")
+}
+
+func safeCID(cid string) bool {
+	if len(cid) < 20 || len(cid) > 128 {
+		return false
+	}
+	for _, char := range cid {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *Authority) PublishRelease(domain string, manifest api.ReleaseManifest) (*api.ReleaseManifest, error) {

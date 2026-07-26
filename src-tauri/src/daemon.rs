@@ -161,11 +161,13 @@ fn route_allows(method: &Method, path: &str) -> bool {
         | (&Method::POST, ["v1", "mesh", "broadcast"])
         | (&Method::GET, ["v1", "ipfs", "status"])
         | (&Method::GET, ["v1", "authority", "domains"])
+        | (&Method::GET, ["v1", "authority", "network-domains"])
         | (&Method::POST, ["v1", "authority", "domains"]) => true,
         (&Method::DELETE, ["v1", "providers", provider]) => safe_identifier(provider),
         (&Method::PUT, ["v1", "providers", provider, "connect"])
         | (&Method::GET, ["v1", "providers", provider, "health"]) => safe_identifier(provider),
         (&Method::GET, ["v1", "authority", "domains", domain, "available"]) => safe_domain(domain),
+        (&Method::GET, ["v1", "authority", "resolve", domain]) => safe_domain(domain),
         _ => false,
     }
 }
@@ -212,6 +214,8 @@ mod tests {
             ("/v1/mesh/broadcast", "POST"),
             ("/v1/ipfs/status", "GET"),
             ("/v1/authority/domains", "GET"),
+            ("/v1/authority/network-domains", "GET"),
+            ("/v1/authority/resolve/demo.racore", "GET"),
             ("/v1/authority/domains/example.com/available", "GET"),
             ("/v1/authority/domains", "POST"),
         ];

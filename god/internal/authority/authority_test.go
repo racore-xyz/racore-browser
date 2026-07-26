@@ -104,6 +104,56 @@ func TestListDomains(t *testing.T) {
 	}
 }
 
+func TestRacoreDomainSuffixes(t *testing.T) {
+	for _, domain := range []string{"app.racore", "studio.rac", "docs.core", "node.ra"} {
+		if !IsRacoreDomain(domain) {
+			t.Fatalf("expected %s to be a Racore domain", domain)
+		}
+	}
+	for _, domain := range []string{"racore", ".rac", "example.com", "../evil.ra", "bad..core"} {
+		if IsRacoreDomain(domain) {
+			t.Fatalf("expected %s to be rejected", domain)
+		}
+	}
+}
+
+func TestNetworkDomainsResolveLocalAndObservedReleases(t *testing.T) {
+	a := New(t.TempDir())
+	local, _, err := a.Create("studio.racore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	local.Releases = append(local.Releases, ReleaseEntry{
+		ReleaseID: "rcp2-local",
+		Manifest: api.ReleaseManifest{
+			Domain: "studio.racore", CID: "bafybeigdyrztabcdefghijklmnop",
+			CreatedAt: 100,
+		},
+	})
+	a.ObserveClaim("shared.core", "did:key:remote", "node-2")
+	a.ObserveRelease(
+		"shared.core",
+		"rcp2-remote",
+		"bafybeigdyrztqrstuvwxyzabcdef",
+		"node-2",
+	)
+
+	items := a.NetworkDomains()
+	if len(items) != 2 {
+		t.Fatalf("expected two network domains, got %d", len(items))
+	}
+	resolved, err := a.ResolveNetworkDomain("shared.core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Source != "mesh" || resolved.NodeID != "node-2" {
+		t.Fatalf("unexpected resolved domain: %+v", resolved)
+	}
+	if _, err := a.ResolveNetworkDomain("example.com"); err == nil {
+		t.Fatal("expected public web domain to be rejected by Racore resolver")
+	}
+}
+
 func TestPublishRelease(t *testing.T) {
 	dir, err := os.MkdirTemp("", "god-auth-*")
 	if err != nil {
