@@ -4516,6 +4516,14 @@ select:focus-visible {
   padding: 8px 10px;
   font-size: 9px;
 }
+.local-model-chip {
+  border: 1px solid #2c353b;
+  background: #20272c;
+  color: #abb5bc;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 9px;
+}
 .simple-command footer button {
   width: 34px;
   height: 34px;

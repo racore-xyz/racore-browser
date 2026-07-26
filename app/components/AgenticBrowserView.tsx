@@ -2,19 +2,15 @@
 
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  daemonRequest,
-  listProviders,
-  ProviderInfo,
-} from "../lib/racore-client";
+import { daemonRequest } from "../lib/racore-client";
 import { desktopBridge, isDesktopApp } from "../lib/desktop";
 import { racoreDomainFromInput } from "../lib/racore-domains";
 
 type Result = {
   text: string;
-  provider?: string;
   model?: string;
   latencyMs?: number;
+  actions?: { type: string; value: string }[];
 };
 type ChatMessage = {
   role: "user" | "assistant";
@@ -32,6 +28,7 @@ type BrowserTab = {
 type Health = {
   mesh: { online: boolean; peers: number };
   ipfs: { online: boolean };
+  localAI: { ready: boolean; label: string };
 };
 type BrowserMode = "racore" | "web";
 type NetworkDomain = {
@@ -48,7 +45,7 @@ type ResolvedDomain = NetworkDomain & {
 };
 
 const suggestions = [
-  "Research a topic with my connected model",
+  "Research a topic with my local model",
   "Open racore.xyz",
   "Explain this page's privacy risks",
 ];
@@ -86,8 +83,6 @@ export function AgenticBrowserView() {
     { id: "initial-tab", title: "New tab", query: "", messages: [] },
   ]);
   const [activeTabId, setActiveTabId] = useState("initial-tab");
-  const [provider, setProvider] = useState("ollama");
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -107,14 +102,8 @@ export function AgenticBrowserView() {
   useEffect(() => {
     const initialize = setTimeout(async () => {
       try {
-        const [catalog, state] = await Promise.all([
-          listProviders(),
-          daemonRequest<Health>("/health"),
-        ]);
-        setProviders(catalog);
+        const state = await daemonRequest<Health>("/health");
         setHealth(state);
-        const connected = catalog.find((item) => item.connected);
-        if (connected) setProvider(connected.id);
         try {
           setNetworkDomains(
             await daemonRequest<NetworkDomain[]>(
@@ -306,7 +295,6 @@ export function AgenticBrowserView() {
       const response = await daemonRequest<Result>("/v1/chat", {
         method: "POST",
         body: {
-          provider,
           messages: requestMessages,
           system:
             "You are Racore, a concise agentic browser assistant. Never claim a web action occurred unless a tool confirmed it. Ask for approval before external side effects.",
@@ -319,15 +307,35 @@ export function AgenticBrowserView() {
           {
             role: "assistant",
             content: response.text,
-            model: response.model || provider,
+            model: response.model || "Hammer 2.0 0.5B",
             latencyMs: response.latencyMs,
           },
         ],
       }));
       setEvents((items) => [
         ...items,
-        `Verified response received from ${response.model || provider}`,
+        `Verified local response from ${response.model || "Hammer 2.0 0.5B"}`,
       ]);
+      for (const action of response.actions || []) {
+        let destination = "";
+        if (action.type === "open_url") {
+          destination = /^https?:\/\//i.test(action.value)
+            ? action.value
+            : `https://${action.value}`;
+        } else if (action.type === "search_web") {
+          destination = `https://duckduckgo.com/?q=${encodeURIComponent(action.value)}`;
+        } else if (action.type === "resolve_racore_domain") {
+          const resolved = await daemonRequest<ResolvedDomain>(
+            `/v1/authority/resolve/${encodeURIComponent(action.value)}`,
+          );
+          destination = resolved.gatewayUrl;
+        }
+        if (destination) {
+          if (isDesktopApp()) await desktopBridge.openBrowser(destination);
+          else window.open(destination, "_blank", "noopener,noreferrer");
+          setEvents((items) => [...items, `${action.type}: ${action.value}`]);
+        }
+      }
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -479,22 +487,7 @@ export function AgenticBrowserView() {
                 }
               />
               <footer>
-                <select
-                  value={provider}
-                  onChange={(event) => setProvider(event.target.value)}
-                  aria-label="AI provider"
-                >
-                  {providers.length ? (
-                    providers.map((item) => (
-                      <option value={item.id} key={item.id}>
-                        {item.name}
-                        {item.connected ? " · connected" : ""}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="ollama">Ollama · local</option>
-                  )}
-                </select>
+                <span className="local-model-chip">✦ Hammer 0.5B · on device</span>
                 <button>↑</button>
               </footer>
             </form>
@@ -586,7 +579,7 @@ export function AgenticBrowserView() {
                     <b>{message.role === "assistant" ? "Racore" : "You"}</b>
                     {message.role === "assistant" && (
                       <small>
-                        {message.model || provider}
+                        {message.model || "Hammer 2.0 0.5B"}
                         {message.latencyMs ? ` · ${message.latencyMs}ms` : ""}
                       </small>
                     )}
@@ -602,7 +595,7 @@ export function AgenticBrowserView() {
             {loading && (
               <article>
                 <p className="working">
-                  Contacting the selected live provider…
+                  Planning locally on this device…
                 </p>
               </article>
             )}
@@ -614,11 +607,11 @@ export function AgenticBrowserView() {
                   <button
                     onClick={() =>
                       window.dispatchEvent(
-                        new CustomEvent("racore:open-providers"),
+                        new CustomEvent("racore:open-local-ai"),
                       )
                     }
                   >
-                    Connect a provider
+                    View local AI status
                   </button>
                 </div>
               </article>
@@ -636,22 +629,7 @@ export function AgenticBrowserView() {
                 placeholder="Continue the conversation or enter a website…"
               />
               <footer>
-                <select
-                  value={provider}
-                  onChange={(event) => setProvider(event.target.value)}
-                  aria-label="AI provider"
-                >
-                  {providers.length ? (
-                    providers.map((item) => (
-                      <option value={item.id} key={item.id}>
-                        {item.name}
-                        {item.connected ? " · connected" : ""}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="ollama">Ollama · local</option>
-                  )}
-                </select>
+                <span className="local-model-chip">✦ Hammer 0.5B · on device</span>
                 <button disabled={loading}>↑</button>
               </footer>
             </form>

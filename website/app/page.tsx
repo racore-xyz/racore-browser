@@ -2,17 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-const providers = ["OpenAI", "Anthropic", "Gemini", "OpenRouter", "Kimi", "Ollama", "OpenCode", "Claude Code", "Kimi Code"];
-
 const architecture = [
   { n: "01", title: "Agentic browser", body: "A Chromium desktop workspace where AI can research, navigate, and act—while every meaningful side effect waits for you." },
-  { n: "02", title: "Local control plane", body: "The Go daemon keeps provider keys, approvals, identity, publishing, and peer connections on your machine." },
+  { n: "02", title: "Local control plane", body: "The Go daemon keeps AI planning, approvals, identity, publishing, and peer connections on your machine." },
   { n: "03", title: "Open web protocol", body: "Signed releases, portable domains, content-addressed storage, and a peer mesh make sites verifiable beyond one platform." },
 ];
 
 const flow = [
   ["01", "ASK", "Give Racore a goal in natural language."],
-  ["02", "PLAN", "The agent chooses tools and the right provider."],
+  ["02", "PLAN", "The bundled local model chooses a browser tool."],
   ["03", "APPROVE", "You confirm actions that change the outside world."],
   ["04", "VERIFY", "Racore returns evidence and signed outputs."],
 ];
@@ -62,7 +60,7 @@ export default function Home() {
         <nav className={menuOpen ? "nav-links is-open" : "nav-links"} aria-label="Main navigation">
           <a href="#system" onClick={() => setMenuOpen(false)}>System</a>
           <a href="#protocol" onClick={() => setMenuOpen(false)}>Protocol</a>
-          <a href="#providers" onClick={() => setMenuOpen(false)}>Providers</a>
+          <a href="#local-ai" onClick={() => setMenuOpen(false)}>Local AI</a>
           <a href="#safety" onClick={() => setMenuOpen(false)}>Safety</a>
         </nav>
         <a className="nav-launch" href="/browser">Launch browser <Arrow /></a>
@@ -137,20 +135,20 @@ export default function Home() {
         <div className="metric-grid">
           <article data-reveal><span>01</span><strong>100<sup>%</sup></strong><h3>Explicit approval</h3><p>External side effects stop at a human checkpoint before execution.</p></article>
           <article data-reveal><span>02</span><strong>127.0.0.1</strong><h3>Local control plane</h3><p>The daemon exposes its API on the loopback interface, close to your data.</p></article>
-          <article data-reveal><span>03</span><strong>AES<sup>256</sup></strong><h3>Encrypted secrets</h3><p>Provider credentials are protected at rest in the local vault.</p></article>
+          <article data-reveal><span>03</span><strong>0.5<sup>B</sup></strong><h3>Bundled intelligence</h3><p>The browser planner runs locally with no model account or API key.</p></article>
           <article data-reveal><span>04</span><strong>0</strong><h3>Policy bypasses</h3><p>No CAPTCHA evasion, access-control bypass, rate-limit avoidance, or ban circumvention.</p></article>
         </div>
       </section>
 
-      <section className="providers section-grid" id="providers">
-        <div className="section-kicker"><span>04</span><p>PROVIDER FREEDOM</p></div>
+      <section className="providers section-grid" id="local-ai">
+        <div className="section-kicker"><span>04</span><p>LOCAL INTELLIGENCE</p></div>
         <div className="provider-heading" data-reveal>
-          <p className="eyebrow">Bring the intelligence you trust</p>
-          <h2>Nine providers.<br />One <em>gateway.</em></h2>
-          <p>Connect cloud models, local runtimes, or coding agents. Racore routes requests through a consistent interface while keys remain under your control.</p>
+          <p className="eyebrow">Private by architecture</p>
+          <h2>One small model.<br />Zero <em>cloud routes.</em></h2>
+          <p>Hammer 2.0 0.5B is bundled with Racore and runs through llama.cpp as a browser-first tool planner.</p>
         </div>
-        <div className="provider-stack" aria-label="Supported AI providers">
-          {providers.map((provider, index) => <div key={provider} style={{ "--i": index } as React.CSSProperties}><span>{String(index + 1).padStart(2, "0")}</span><b>{provider}</b><i>{index < 5 ? "CLOUD" : "LOCAL"}</i></div>)}
+        <div className="provider-stack" aria-label="Bundled local AI">
+          {["Hammer 2.0 0.5B", "llama.cpp CPU runtime", "Racore browser tools"].map((component, index) => <div key={component} style={{ "--i": index } as React.CSSProperties}><span>{String(index + 1).padStart(2, "0")}</span><b>{component}</b><i>LOCAL</i></div>)}
         </div>
       </section>
 
@@ -166,9 +164,9 @@ export default function Home() {
         <div className="map-header"><span>06 / REPOSITORY ARCHITECTURE</span><span>WINDOWS · WEB · PEER NETWORK</span></div>
         <div className="map-title" data-reveal><p className="eyebrow">Built as interoperable layers</p><h2>One product.<br />Clear <em>responsibilities.</em></h2></div>
         <div className="system-map" data-reveal>
-          <div className="map-column"><span>INTERFACE</span><article><b>React + Next.js</b><p>Agentic browser, sites, providers, network, and system views.</p></article><article><b>Electron / Tauri</b><p>Desktop packaging and a secure bridge to the local runtime.</p></article></div>
+          <div className="map-column"><span>INTERFACE</span><article><b>React + Next.js</b><p>Agentic browser, sites, local AI, network, and system views.</p></article><article><b>Electron / Tauri</b><p>Desktop packaging and a secure bridge to the local runtime.</p></article></div>
           <div className="map-spine"><i /><i /><i /><i /><i /></div>
-          <div className="map-column map-column-right"><span>CONTROL PLANE</span><article><b>racored / Go</b><p>REST + WebSocket API, approvals, gateway, vault, and orchestration.</p></article><article><b>Protocol + storage</b><p>DID identity, signed messages, domain authority, mesh, and IPFS.</p></article></div>
+          <div className="map-column map-column-right"><span>CONTROL PLANE</span><article><b>racored / Go</b><p>REST + WebSocket API, local AI planning, approvals, and orchestration.</p></article><article><b>Protocol + storage</b><p>DID identity, signed messages, domain authority, mesh, and IPFS.</p></article></div>
         </div>
       </section>
 
@@ -185,7 +183,7 @@ export default function Home() {
       <footer className="landing-footer">
         <a className="footer-logo" href="#top"><img src="/brand/racore-logo.png" alt="Racore.xyz" width="190" height="48" /></a>
         <p>Agentic browser &amp; open web protocol.<br />Designed for human agency.</p>
-        <div><a href="#system">System</a><a href="#protocol">Protocol</a><a href="#providers">Providers</a><a href="/browser">Launch</a></div>
+        <div><a href="#system">System</a><a href="#protocol">Protocol</a><a href="#local-ai">Local AI</a><a href="/browser">Launch</a></div>
         <span>© 2026 RACORE.XYZ</span>
       </footer>
     </main>

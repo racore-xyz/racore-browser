@@ -34,8 +34,8 @@ test("server-renders Racore metadata and branded loading state", async () => {
   assert.match(html, /class="(?:racore-loading|landing)"/);
 });
 
-test("ships the agentic browser, onboarding, providers, and live mesh views", async () => {
-  const [page, onboarding, browser, providers, network, layout] =
+test("ships the agentic browser, onboarding, local AI, and live mesh views", async () => {
+  const [page, onboarding, browser, localAI, network, layout] =
     await Promise.all([
       readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
       readFile(
@@ -47,7 +47,7 @@ test("ships the agentic browser, onboarding, providers, and live mesh views", as
         "utf8",
       ),
       readFile(
-        new URL("../app/components/ProvidersView.tsx", import.meta.url),
+        new URL("../app/components/LocalAIView.tsx", import.meta.url),
         "utf8",
       ),
       readFile(
@@ -58,9 +58,9 @@ test("ships the agentic browser, onboarding, providers, and live mesh views", as
     ]);
 
   assert.match(page, /<Onboarding|className="landing"/);
-  assert.match(onboarding, /AI PROVIDERS/);
+  assert.match(onboarding, /LOCAL AI/);
   assert.match(browser, /Ask a question(?:, describe a task, or paste a URL| or enter a website)/);
-  assert.match(providers, /AI providers/);
+  assert.match(localAI, /No API keys and no cloud model routes/);
   assert.match(network, /Racore Mesh/);
   assert.match(layout, /og-racore-(?:v2|editorial)\.png/);
 });

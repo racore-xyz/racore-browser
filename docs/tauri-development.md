@@ -35,6 +35,6 @@ The Go UDP transport now routes `SO_REUSEADDR` and read-side shutdown through bu
 
 `app/lib/desktop.ts` is the single typed desktop boundary. It maps React calls to `daemon_status`, `daemon_request`, `platform_info`, `open_browser`, and `open_external` with `@tauri-apps/api/core`, and maps daemon termination to the `racore://daemon-exit` event with `@tauri-apps/api/event`. Event subscriptions return Tauri's unsubscribe function so components can release listeners during unmount.
 
-`app/lib/racore-client.ts` keeps the established `daemonRequest(path, { method, body })` workflow. In the Tauri static build it calls the Rust proxy; in the hosted Vinext build it continues to fetch the loopback daemon directly. HTTP success/error envelopes and provider request schemas are unchanged.
+`app/lib/racore-client.ts` keeps the established `daemonRequest(path, { method, body })` workflow. In the Tauri static build it calls the Rust proxy; in the hosted Vinext build it continues to fetch the loopback daemon directly. AI requests always route to the bundled local model.
 
 The desktop entry installs a temporary `window.racoreDesktop` compatibility facade backed entirely by Tauri. This allows older UI surfaces to coexist during the migration without a preload script; new and migrated code imports the typed adapter directly.

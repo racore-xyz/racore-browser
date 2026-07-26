@@ -1836,7 +1836,7 @@ function createInlineScriptTag(content, nonce) {
 * LICENSE file in the root directory of this source tree.
 */
 var require_react_jsx_runtime_production = /* @__PURE__ */ __commonJSMin(((exports) => {
-	var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"), REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
+	var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");
 	function jsxProd(type, config, maybeKey) {
 		var key = null;
 		void 0 !== maybeKey && (key = "" + maybeKey);
@@ -1854,7 +1854,6 @@ var require_react_jsx_runtime_production = /* @__PURE__ */ __commonJSMin(((expor
 			props: maybeKey
 		};
 	}
-	exports.Fragment = REACT_FRAGMENT_TYPE;
 	exports.jsx = jsxProd;
 	exports.jsxs = jsxProd;
 }));
@@ -11635,13 +11634,13 @@ var client_references_default = {
 		} };
 	},
 	"6ad9b72f81bd": async () => {
-		const m = await import("./assets/RacoreProductApp-DfrcT4VB.js");
+		const m = await import("./assets/RacoreProductApp-CG8Q6onQ.js");
 		return { get "RacoreProductApp"() {
 			return m["RacoreProductApp"];
 		} };
 	},
 	"6efdf509a785": async () => {
-		const m = await import("./assets/page-9yCZ8tt0.js");
+		const m = await import("./assets/page-CBylQRlO.js");
 		return { get "default"() {
 			return m["default"];
 		} };

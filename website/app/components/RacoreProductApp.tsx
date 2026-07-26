@@ -5,17 +5,17 @@ import { useEffect, useState } from "react";
 import { AgenticBrowserView } from "./AgenticBrowserView";
 import { LiveNetworkView } from "./LiveNetworkView";
 import { Onboarding } from "./Onboarding";
-import { ProvidersView } from "./ProvidersView";
+import { LocalAIView } from "./LocalAIView";
 import { SitesView } from "./SitesView";
 import { daemonRequest } from "../lib/racore-client";
 import { desktopBridge, isDesktopApp } from "../lib/desktop";
 
-type View = "browser" | "sites" | "providers" | "network" | "system";
+type View = "browser" | "sites" | "ai" | "network" | "system";
 
 const navigation: { id: View; icon: string; label: string }[] = [
   { id: "browser", icon: "⌕", label: "Browser" },
   { id: "sites", icon: "◇", label: "Sites" },
-  { id: "providers", icon: "✦", label: "AI" },
+  { id: "ai", icon: "✦", label: "AI" },
   { id: "network", icon: "◎", label: "Network" },
   { id: "system", icon: "⚙", label: "System" },
 ];
@@ -46,7 +46,7 @@ function SystemView() {
       </div>
       <div className="component-stack">
         <article><i className="ready">✓</i><div><b>Racore Browser</b><p>Tauri desktop shell and local React interface</p></div><span>{platform?.packaged ? `Installed · v${platform.version}` : "Web preview"}</span></article>
-        <article><i className={health ? "ready" : "waiting"}>{health ? "✓" : "○"}</i><div><b>Go agent service</b><p>Provider gateway, encrypted vault, authority, approvals, and mesh</p></div><span>{health ? "Running on 127.0.0.1:47831" : "Not detected"}</span></article>
+        <article><i className={health ? "ready" : "waiting"}>{health ? "✓" : "○"}</i><div><b>Go agent service</b><p>Local AI planner, authority, approvals, and mesh</p></div><span>{health ? "Running on 127.0.0.1:47831" : "Not detected"}</span></article>
         <article><i className={ipfs?.online ? "ready" : "waiting"}>{ipfs?.online ? "✓" : "○"}</i><div><b>IPFS Kubo</b><p>Bundled content-addressed storage node</p></div><span>{ipfs?.online ? ipfs.agentVersion : "Not detected"}</span></article>
         <article><i className={platform?.packaged ? "ready" : "waiting"}>{platform?.packaged ? "✓" : "○"}</i><div><b>Racore CLI</b><p>Framework build publishing tool included with the desktop app</p></div><span>{platform?.packaged ? "Bundled native sidecar" : "Available in desktop package"}</span></article>
         <article><i className={mesh?.online ? "ready" : "waiting"}>{mesh?.online ? "✓" : "○"}</i><div><b>Racoon Mesh</b><p>Signed RMP discovery and live connector events</p></div><span>{mesh?.online ? "Online" : "Not detected"}</span></article>
@@ -65,11 +65,11 @@ export function RacoreProductApp() {
       const force = new URLSearchParams(window.location.search).get("onboarding") === "1";
       setOnboarded(!force && Boolean(localStorage.getItem("racore:onboarded")));
     }, 0);
-    const openProviders = () => setView("providers");
-    window.addEventListener("racore:open-providers", openProviders);
+    const openLocalAI = () => setView("ai");
+    window.addEventListener("racore:open-local-ai", openLocalAI);
     return () => {
       clearTimeout(initialize);
-      window.removeEventListener("racore:open-providers", openProviders);
+      window.removeEventListener("racore:open-local-ai", openLocalAI);
     };
   }, []);
 
@@ -86,7 +86,7 @@ export function RacoreProductApp() {
       <section className="workspace-shell">
         {view === "browser" && <AgenticBrowserView />}
         {view === "sites" && <SitesView />}
-        {view === "providers" && <ProvidersView />}
+        {view === "ai" && <LocalAIView />}
         {view === "network" && <LiveNetworkView />}
         {view === "system" && <SystemView />}
       </section>

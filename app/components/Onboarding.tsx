@@ -1,57 +1,24 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
-import {
-  checkDaemon,
-  connectProvider,
-  listProviders,
-  ProviderInfo,
-} from "../lib/racore-client";
+import { useEffect, useState } from "react";
+import { checkDaemon } from "../lib/racore-client";
 
 const steps = ["Welcome", "Privacy", "AI", "Network", "Ready"];
 
 export function Onboarding({ onFinish }: { onFinish: () => void }) {
   const [step, setStep] = useState(0);
-  const [privacy, setPrivacy] = useState("hybrid");
   const [nodeMode, setNodeMode] = useState(true);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [provider, setProvider] = useState("openrouter");
-  const [key, setKey] = useState("");
-  const [message, setMessage] = useState("");
   const [daemon, setDaemon] = useState(false);
 
   useEffect(() => {
-    checkDaemon().then((value) => {
-      setDaemon(Boolean(value));
-      if (value)
-        listProviders()
-          .then(setProviders)
-          .catch(() => {});
-    });
+    checkDaemon().then((value) => setDaemon(Boolean(value)));
   }, []);
-  const connected = useMemo(
-    () => providers.filter((item) => item.connected),
-    [providers],
-  );
-
-  async function saveProvider() {
-    if (!key.trim()) return;
-    setMessage("Connecting securely…");
-    try {
-      await connectProvider(provider, key.trim());
-      setProviders(await listProviders());
-      setKey("");
-      setMessage("Connected. The key is encrypted in your local vault.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Connection failed");
-    }
-  }
 
   function finish() {
     localStorage.setItem(
       "racore:onboarded",
-      JSON.stringify({ privacy, nodeMode, at: Date.now() }),
+      JSON.stringify({ intelligence: "local", nodeMode, at: Date.now() }),
     );
     onFinish();
   }
@@ -77,7 +44,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
         <div className="onboarding-proof">
           <div>
             <b>Local-first</b>
-            <span>Your keys stay on this device</span>
+            <span>AI inference stays on this device</span>
           </div>
           <div>
             <b>Verifiable</b>
@@ -85,7 +52,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
           </div>
           <div>
             <b>Portable</b>
-            <span>Move between AI and hosting providers</span>
+            <span>No model account or API key required</span>
           </div>
         </div>
       </aside>
@@ -143,125 +110,37 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
           {step === 1 && (
             <section>
               <span className="step-kicker">PRIVACY MODE</span>
-              <h2>Choose where intelligence runs.</h2>
-              <p>You can change this per workspace or task later.</p>
+              <h2>Intelligence runs on your device.</h2>
+              <p>Racore does not send prompts to a cloud model.</p>
               <div className="choice-grid privacy-choices">
-                {[
-                  [
-                    "local",
-                    "Local only",
-                    "Ollama and local CLI agents. Nothing is sent to cloud AI.",
-                    "▣",
-                  ],
-                  [
-                    "hybrid",
-                    "Hybrid · Recommended",
-                    "Local models for private work, cloud models when quality matters.",
-                    "◇",
-                  ],
-                  [
-                    "cloud",
-                    "Cloud first",
-                    "Use connected providers with automatic quality and cost routing.",
-                    "☁",
-                  ],
-                ].map((item) => (
-                  <button
-                    key={item[0]}
-                    className={privacy === item[0] ? "selected" : ""}
-                    onClick={() => setPrivacy(item[0])}
-                  >
-                    <i>{item[3]}</i>
-                    <b>{item[1]}</b>
-                    <span>{item[2]}</span>
-                    <em>{privacy === item[0] ? "●" : "○"}</em>
-                  </button>
-                ))}
+                <button className="selected">
+                  <i>▣</i>
+                  <b>Local only</b>
+                  <span>Hammer 2.0 0.5B runs through the bundled llama.cpp engine.</span>
+                  <em>●</em>
+                </button>
               </div>
             </section>
           )}
           {step === 2 && (
             <section>
-              <span className="step-kicker">AI PROVIDERS</span>
-              <h2>Connect your first intelligence provider.</h2>
+              <span className="step-kicker">LOCAL AI</span>
+              <h2>Your browser planner is already included.</h2>
               <p>
-                API keys are encrypted by the Python daemon and never stored in
-                the website.
+                No API key, account, subscription, or third-party model route is
+                required.
               </p>
-              {daemon ? (
-                <>
-                  <div className="provider-picks">
-                    {(providers.length
-                      ? providers
-                      : ([
-                          { id: "openrouter", name: "OpenRouter" },
-                          { id: "openai", name: "OpenAI" },
-                          { id: "anthropic", name: "Anthropic" },
-                          { id: "gemini", name: "Gemini" },
-                          { id: "kimi", name: "Kimi" },
-                          { id: "ollama", name: "Ollama" },
-                        ] as ProviderInfo[])
-                    )
-                      .filter(
-                        (p) =>
-                          !["opencode", "claude-code", "kimi-code"].includes(
-                            p.id,
-                          ),
-                      )
-                      .map((p) => (
-                        <button
-                          key={p.id}
-                          className={provider === p.id ? "selected" : ""}
-                          onClick={() => setProvider(p.id)}
-                        >
-                          <span>{p.name.slice(0, 2).toUpperCase()}</span>
-                          <b>{p.name}</b>
-                          <em>
-                            {p.connected
-                              ? "CONNECTED"
-                              : p.local
-                                ? "LOCAL"
-                                : "CONNECT"}
-                          </em>
-                        </button>
-                      ))}
-                  </div>
-                  {provider !== "ollama" && (
-                    <div className="key-connect">
-                      <label>
-                        {providers.find((p) => p.id === provider)?.name ||
-                          provider}{" "}
-                        API key
-                        <input
-                          type="password"
-                          value={key}
-                          onChange={(event) => setKey(event.target.value)}
-                          placeholder="Paste your key — it stays on this device"
-                        />
-                      </label>
-                      <button onClick={saveProvider} disabled={!key.trim()}>
-                        Connect securely
-                      </button>
-                    </div>
-                  )}
-                  <p className="connect-message">
-                    {message ||
-                      `${connected.length} provider${connected.length === 1 ? "" : "s"} ready`}
+              <div className="daemon-needed">
+                <span>{daemon ? "✓" : "◌"}</span>
+                <div>
+                  <b>{daemon ? "Local AI service detected" : "Open this setup in Racore Desktop"}</b>
+                  <p>
+                    {daemon
+                      ? "Hammer is managed in the background with a CPU-first, low-resource configuration."
+                      : "The packaged desktop app includes both the model and its inference runtime."}
                   </p>
-                </>
-              ) : (
-                <div className="daemon-needed">
-                  <span>◌</span>
-                  <div>
-                    <b>Open this setup in Racore Desktop</b>
-                    <p>
-                      The local Python service is required to encrypt
-                      credentials and connect providers. You can continue
-                      exploring the web preview without entering a key.
-                    </p>
-                  </div>
                 </div>
-              )}
+              </div>
             </section>
           )}
           {step === 3 && (
@@ -332,17 +211,12 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
               <div className="ready-summary">
                 <span>
                   <b>
-                    {privacy === "hybrid"
-                      ? "Hybrid"
-                      : privacy === "local"
-                        ? "Local"
-                        : "Cloud"}
+                    Local
                   </b>{" "}
                   intelligence
                 </span>
                 <span>
-                  <b>{connected.length || (privacy === "local" ? 1 : 0)}</b> AI
-                  providers
+                  <b>1</b> bundled AI model
                 </span>
                 <span>
                   <b>{nodeMode ? "On" : "Off"}</b> mesh node

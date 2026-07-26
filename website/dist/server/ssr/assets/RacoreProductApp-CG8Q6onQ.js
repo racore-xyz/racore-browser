@@ -3136,26 +3136,18 @@ async function checkDaemon() {
 		return null;
 	}
 }
-async function listProviders() {
-	return daemonRequest("/v1/providers");
-}
-async function connectProvider(provider, apiKey) {
-	return daemonRequest(`/v1/providers/${provider}/connect`, {
-		method: "PUT",
-		body: { api_key: apiKey }
-	});
+async function localAIStatus() {
+	return daemonRequest("/v1/local-ai/status");
 }
 //#endregion
 //#region app/components/AgenticBrowserView.tsx
 var suggestions = [
-	"Research a topic with my connected model",
+	"Research a topic with my local model",
 	"Open racore.xyz",
 	"Explain this page's privacy risks"
 ];
 function AgenticBrowserView() {
 	const [query, setQuery] = (0, import_react.useState)("");
-	const [provider, setProvider] = (0, import_react.useState)("ollama");
-	const [providers, setProviders] = (0, import_react.useState)([]);
 	const [health, setHealth] = (0, import_react.useState)(null);
 	const [result, setResult] = (0, import_react.useState)(null);
 	const [loading, setLoading] = (0, import_react.useState)(false);
@@ -3165,11 +3157,7 @@ function AgenticBrowserView() {
 	(0, import_react.useEffect)(() => {
 		const initialize = setTimeout(async () => {
 			try {
-				const [catalog, state] = await Promise.all([listProviders(), daemonRequest("/health")]);
-				setProviders(catalog);
-				setHealth(state);
-				const connected = catalog.find((item) => item.connected);
-				if (connected) setProvider(connected.id);
+				setHealth(await daemonRequest("/health"));
 			} catch {
 				setHealth(null);
 			}
@@ -3193,7 +3181,6 @@ function AgenticBrowserView() {
 			const response = await daemonRequest("/v1/chat", {
 				method: "POST",
 				body: {
-					provider,
 					messages: [{
 						role: "user",
 						content: input
@@ -3202,7 +3189,12 @@ function AgenticBrowserView() {
 				}
 			});
 			setResult(response);
-			setEvents((items) => [...items, `Verified response received from ${response.model || provider}`]);
+			setEvents((items) => [...items, `Verified local response from ${response.model || "Hammer 2.0 0.5B"}`]);
+			for (const action of response.actions || []) {
+				const destination = action.type === "open_url" ? /^https?:\/\//i.test(action.value) ? action.value : `https://${action.value}` : action.type === "search_web" ? `https://duckduckgo.com/?q=${encodeURIComponent(action.value)}` : "";
+				if (destination) if (isDesktopApp()) await desktopBridge.openBrowser(destination);
+				else window.open(destination, "_blank", "noopener,noreferrer");
+			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : "No live AI route is connected.");
 			setEvents((items) => [...items, "Stopped without fabricating a response"]);
@@ -3288,17 +3280,9 @@ function AgenticBrowserView() {
 								value: query,
 								onChange: (event) => setQuery(event.target.value),
 								placeholder: "Ask a question or enter a website…"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("footer", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-								value: provider,
-								onChange: (event) => setProvider(event.target.value),
-								"aria-label": "AI provider",
-								children: providers.length ? providers.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-									value: item.id,
-									children: [item.name, item.connected ? " · connected" : ""]
-								}, item.id)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-									value: "ollama",
-									children: "Ollama · local"
-								})
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("footer", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "local-model-chip",
+								children: "✦ Hammer 0.5B · on device"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { children: "↑" })] })]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -3341,10 +3325,10 @@ function AgenticBrowserView() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: query }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "✦" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Racore" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("small", { children: [result?.model || provider, result?.latencyMs ? ` · ${result.latencyMs}ms` : ""] })] })] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "✦" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Racore" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("small", { children: [result?.model || "Hammer 2.0 0.5B", result?.latencyMs ? ` · ${result.latencyMs}ms` : ""] })] })] }),
 							loading && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "working",
-								children: "Contacting the selected live provider…"
+								children: "Planning locally on this device…"
 							}),
 							result?.text.split("\n").map((line, index) => line.trim() ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: line }, index) : null),
 							error && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -3353,8 +3337,8 @@ function AgenticBrowserView() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "No response was fabricated." }),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: error }),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: () => window.dispatchEvent(new CustomEvent("racore:open-providers")),
-										children: "Connect a provider"
+										onClick: () => window.dispatchEvent(new CustomEvent("racore:open-local-ai")),
+										children: "View local AI status"
 									})
 								]
 							})
@@ -3552,35 +3536,14 @@ var steps = [
 ];
 function Onboarding({ onFinish }) {
 	const [step, setStep] = (0, import_react.useState)(0);
-	const [privacy, setPrivacy] = (0, import_react.useState)("hybrid");
 	const [nodeMode, setNodeMode] = (0, import_react.useState)(true);
-	const [providers, setProviders] = (0, import_react.useState)([]);
-	const [provider, setProvider] = (0, import_react.useState)("openrouter");
-	const [key, setKey] = (0, import_react.useState)("");
-	const [message, setMessage] = (0, import_react.useState)("");
 	const [daemon, setDaemon] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
-		checkDaemon().then((value) => {
-			setDaemon(Boolean(value));
-			if (value) listProviders().then(setProviders).catch(() => {});
-		});
+		checkDaemon().then((value) => setDaemon(Boolean(value)));
 	}, []);
-	const connected = (0, import_react.useMemo)(() => providers.filter((item) => item.connected), [providers]);
-	async function saveProvider() {
-		if (!key.trim()) return;
-		setMessage("Connecting securely…");
-		try {
-			await connectProvider(provider, key.trim());
-			setProviders(await listProviders());
-			setKey("");
-			setMessage("Connected. The key is encrypted in your local vault.");
-		} catch (error) {
-			setMessage(error instanceof Error ? error.message : "Connection failed");
-		}
-	}
 	function finish() {
 		localStorage.setItem("racore:onboarded", JSON.stringify({
-			privacy,
+			intelligence: "local",
 			nodeMode,
 			at: Date.now()
 		}));
@@ -3616,9 +3579,9 @@ function Onboarding({ onFinish }) {
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "onboarding-proof",
 					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Local-first" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Your keys stay on this device" })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Local-first" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "AI inference stays on this device" })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Verifiable" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Every release has a content proof" })] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Portable" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Move between AI and hosting providers" })] })
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Portable" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "No model account or API key required" })] })
 					]
 				})
 			]
@@ -3674,115 +3637,31 @@ function Onboarding({ onFinish }) {
 								className: "step-kicker",
 								children: "PRIVACY MODE"
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Choose where intelligence runs." }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "You can change this per workspace or task later." }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Intelligence runs on your device." }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Racore does not send prompts to a cloud model." }),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "choice-grid privacy-choices",
-								children: [
-									[
-										"local",
-										"Local only",
-										"Ollama and local CLI agents. Nothing is sent to cloud AI.",
-										"▣"
-									],
-									[
-										"hybrid",
-										"Hybrid · Recommended",
-										"Local models for private work, cloud models when quality matters.",
-										"◇"
-									],
-									[
-										"cloud",
-										"Cloud first",
-										"Use connected providers with automatic quality and cost routing.",
-										"☁"
-									]
-								].map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									className: privacy === item[0] ? "selected" : "",
-									onClick: () => setPrivacy(item[0]),
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									className: "selected",
 									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("i", { children: item[3] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: item[1] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: item[2] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("em", { children: privacy === item[0] ? "●" : "○" })
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("i", { children: "▣" }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Local only" }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Hammer 2.0 0.5B runs through the bundled llama.cpp engine." }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("em", { children: "●" })
 									]
-								}, item[0]))
+								})
 							})
 						] }),
 						step === 2 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "step-kicker",
-								children: "AI PROVIDERS"
+								children: "LOCAL AI"
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Connect your first intelligence provider." }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "API keys are encrypted by the Python daemon and never stored in the website." }),
-							daemon ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "provider-picks",
-									children: (providers.length ? providers : [
-										{
-											id: "openrouter",
-											name: "OpenRouter"
-										},
-										{
-											id: "openai",
-											name: "OpenAI"
-										},
-										{
-											id: "anthropic",
-											name: "Anthropic"
-										},
-										{
-											id: "gemini",
-											name: "Gemini"
-										},
-										{
-											id: "kimi",
-											name: "Kimi"
-										},
-										{
-											id: "ollama",
-											name: "Ollama"
-										}
-									]).filter((p) => ![
-										"opencode",
-										"claude-code",
-										"kimi-code"
-									].includes(p.id)).map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										className: provider === p.id ? "selected" : "",
-										onClick: () => setProvider(p.id),
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: p.name.slice(0, 2).toUpperCase() }),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: p.name }),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("em", { children: p.connected ? "CONNECTED" : p.local ? "LOCAL" : "CONNECT" })
-										]
-									}, p.id))
-								}),
-								provider !== "ollama" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "key-connect",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-										providers.find((p) => p.id === provider)?.name || provider,
-										" ",
-										"API key",
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "password",
-											value: key,
-											onChange: (event) => setKey(event.target.value),
-											placeholder: "Paste your key — it stays on this device"
-										})
-									] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: saveProvider,
-										disabled: !key.trim(),
-										children: "Connect securely"
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "connect-message",
-									children: message || `${connected.length} provider${connected.length === 1 ? "" : "s"} ready`
-								})
-							] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Your browser planner is already included." }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "No API key, account, subscription, or third-party model route is required." }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "daemon-needed",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "◌" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Open this setup in Racore Desktop" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "The local Python service is required to encrypt credentials and connect providers. You can continue exploring the web preview without entering a key." })] })]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: daemon ? "✓" : "◌" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: daemon ? "Local AI service detected" : "Open this setup in Racore Desktop" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: daemon ? "Hammer is managed in the background with a CPU-first, low-resource configuration." : "The packaged desktop app includes both the model and its inference runtime." })] })]
 							})
 						] }),
 						step === 3 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [
@@ -3851,11 +3730,11 @@ function Onboarding({ onFinish }) {
 									className: "ready-summary",
 									children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: privacy === "hybrid" ? "Hybrid" : privacy === "local" ? "Local" : "Cloud" }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Local" }),
 											" ",
 											"intelligence"
 										] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: connected.length || (privacy === "local" ? 1 : 0) }), " AI providers"] }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "1" }), " bundled AI model"] }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: nodeMode ? "On" : "Off" }), " mesh node"] })
 									]
 								})
@@ -3887,171 +3766,67 @@ function Onboarding({ onFinish }) {
 	});
 }
 //#endregion
-//#region app/components/ProvidersView.tsx
-var accents = {
-	openai: "OA",
-	anthropic: "AI",
-	gemini: "G",
-	openrouter: "OR",
-	kimi: "K",
-	ollama: "OL",
-	opencode: "OC",
-	"claude-code": "CC",
-	"kimi-code": "KC"
-};
-function ProvidersView() {
-	const [providers, setProviders] = (0, import_react.useState)([]);
-	const [selected, setSelected] = (0, import_react.useState)(null);
-	const [key, setKey] = (0, import_react.useState)("");
-	const [message, setMessage] = (0, import_react.useState)("Loading local gateway…");
-	const [busy, setBusy] = (0, import_react.useState)(false);
-	async function refresh() {
-		try {
-			setProviders(await listProviders());
-			setMessage("");
-		} catch {
-			setMessage("Open Racore Desktop or start racored to manage live providers.");
-		}
-	}
+//#region app/components/LocalAIView.tsx
+function LocalAIView() {
+	const [status, setStatus] = (0, import_react.useState)(null);
+	const [error, setError] = (0, import_react.useState)("");
 	(0, import_react.useEffect)(() => {
-		const initial = setTimeout(() => void refresh(), 0);
-		return () => clearTimeout(initial);
+		const refresh = () => localAIStatus().then((value) => {
+			setStatus(value);
+			setError("");
+		}).catch((cause) => {
+			setStatus(null);
+			setError(cause instanceof Error ? cause.message : "Local AI unavailable");
+		});
+		refresh();
+		const timer = window.setInterval(refresh, 5e3);
+		return () => window.clearInterval(timer);
 	}, []);
-	async function connect() {
-		if (!selected || !key.trim()) return;
-		setBusy(true);
-		try {
-			await connectProvider(selected.id, key);
-			setSelected(null);
-			setKey("");
-			await refresh();
-		} catch (error) {
-			setMessage(error instanceof Error ? error.message : "Connection failed");
-		} finally {
-			setBusy(false);
-		}
-	}
-	async function disconnect(id) {
-		await daemonRequest(`/v1/providers/${id}`, { method: "DELETE" });
-		await refresh();
-	}
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "screen providers-screen",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "screen-head",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: "AI providers" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "One gateway for local, free, paid, and routed intelligence." })] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					className: "secondary",
-					onClick: refresh,
-					children: "↻ Refresh health"
-				}) })]
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: "Local AI" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "One bundled browser planner. No API keys and no cloud model routes." })] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+					className: status?.ready ? "connected" : "",
+					children: ["● ", status?.ready ? "READY" : "STARTING"]
+				})]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "provider-summary",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "CONNECTED ROUTES" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: providers.filter((p) => p.connected).length }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: "Ready on this device" })
-					] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "DEFAULT POLICY" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Hybrid" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: "Private tasks stay local" })
-					] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "MONTHLY BUDGET" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "$50" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: "Hard stop enabled" })
-					] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "FALLBACK" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "On" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: "Explain every route" })
-					] })
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "MODEL" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: status?.label || "Hammer 2.0 0.5B" })] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "FOOTPRINT" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "0.5B · Q8_0" })] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "PRIVACY" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "100% local" })] })
 				]
 			}),
-			message && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			(error || status?.error) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "provider-message",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "◇" }), message]
+				children: error || status?.error
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "provider-grid",
-				children: (providers.length ? providers : Object.keys(accents).map((id) => ({
-					id,
-					name: id,
-					kind: "",
-					defaultModel: "",
-					free: false,
-					local: false,
-					connected: false
-				}))).map((provider) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: accents[provider.id] || provider.name.slice(0, 2) }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: provider.name }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: provider.local ? "LOCAL / CLI" : "CLOUD API" })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "H2" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: status?.model || "MadeAgents/Hammer2.0-0.5b" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: "ON-DEVICE BROWSER PLANNER" })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("em", {
-							className: provider.connected ? "connected" : "",
-							children: ["● ", provider.connected ? "CONNECTED" : "OFFLINE"]
+							className: status?.ready ? "connected" : "",
+							children: ["● ", status?.state?.toUpperCase() || "LOADING"]
 						})
 					] }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "provider-model",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Default model" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: provider.defaultModel || "Detect after connection" })]
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Inference engine" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: status?.engine || "llama.cpp · CPU first" })]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "provider-tags",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: provider.free ? "Free route" : "Usage billed" }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: provider.local ? "Device private" : "Encrypted key" }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Tool capable" })
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "No network inference" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "No credentials" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "CC-BY-4.0" })
 						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("footer", { children: [provider.connected && !provider.local ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						className: "secondary",
-						onClick: () => disconnect(provider.id),
-						children: "Disconnect"
-					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						className: "primary",
-						onClick: () => provider.local ? daemonRequest(`/v1/providers/${provider.id}/health`).then(() => refresh()) : setSelected(provider),
-						children: provider.connected ? "Test connection" : "Connect"
-					})] })
-				] }, provider.id))
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-				className: "routing-policy",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "⑂" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Racore Smart Route" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Choose the best available model by privacy, tool support, latency, and budget—then show the decision in the agent trace." })] })] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					className: "toggle on",
-					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("i", {})
-				})]
-			}),
-			selected && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "provider-modal",
-				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: accents[selected.id] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("b", { children: ["Connect ", selected.name] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("small", { children: "Stored only in your encrypted local vault" })] })] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						onClick: () => setSelected(null),
-						children: "×"
-					})] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: ["API key", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "password",
-						autoFocus: true,
-						value: key,
-						onChange: (event) => setKey(event.target.value),
-						placeholder: "Paste your provider API key"
-					})] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "provider-security",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "◇" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "The browser sends this directly to the local Python daemon. It is encrypted before being written to disk." })]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("footer", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						className: "secondary",
-						onClick: () => setSelected(null),
-						children: "Cancel"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						className: "primary",
-						disabled: busy || !key.trim(),
-						onClick: connect,
-						children: busy ? "Connecting…" : "Connect securely"
-					})] })
+					})
 				] })
 			})
 		]
@@ -4197,7 +3972,7 @@ var navigation = [
 		label: "Sites"
 	},
 	{
-		id: "providers",
+		id: "ai",
 		icon: "✦",
 		label: "AI"
 	},
@@ -4251,7 +4026,7 @@ function SystemView() {
 							className: health ? "ready" : "waiting",
 							children: health ? "✓" : "○"
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Go agent service" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Provider gateway, encrypted vault, authority, approvals, and mesh" })] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Go agent service" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Local AI planner, authority, approvals, and mesh" })] }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: health ? "Running on 127.0.0.1:47831" : "Not detected" })
 					] }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [
@@ -4298,11 +4073,11 @@ function RacoreProductApp() {
 		const initialize = setTimeout(() => {
 			setOnboarded(!(new URLSearchParams(window.location.search).get("onboarding") === "1") && Boolean(localStorage.getItem("racore:onboarded")));
 		}, 0);
-		const openProviders = () => setView("providers");
-		window.addEventListener("racore:open-providers", openProviders);
+		const openLocalAI = () => setView("ai");
+		window.addEventListener("racore:open-local-ai", openLocalAI);
 		return () => {
 			clearTimeout(initialize);
-			window.removeEventListener("racore:open-providers", openProviders);
+			window.removeEventListener("racore:open-local-ai", openLocalAI);
 		};
 	}, []);
 	if (onboarded === null) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("main", {
@@ -4353,7 +4128,7 @@ function RacoreProductApp() {
 			children: [
 				view === "browser" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AgenticBrowserView, {}),
 				view === "sites" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SitesView, {}),
-				view === "providers" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProvidersView, {}),
+				view === "ai" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LocalAIView, {}),
 				view === "network" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LiveNetworkView, {}),
 				view === "system" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SystemView, {})
 			]

@@ -2,15 +2,16 @@ import { desktopBridge, isDesktopApp } from "./desktop";
 
 const LOCAL_DAEMON = "http://127.0.0.1:47831";
 
-export type ProviderInfo = {
-  id: string;
-  name: string;
-  kind: string;
-  defaultModel: string;
-  free: boolean;
-  local: boolean;
-  connected: boolean;
-  maskedKey?: string | null;
+export type LocalAIStatus = {
+  ready: boolean;
+  state: "ready" | "offline" | "error";
+  model: string;
+  label: string;
+  engine: string;
+  parameters: number;
+  quantization: string;
+  localOnly: true;
+  error?: string;
 };
 
 export async function daemonRequest<T>(
@@ -52,13 +53,6 @@ export async function checkDaemon() {
   }
 }
 
-export async function listProviders(): Promise<ProviderInfo[]> {
-  return daemonRequest<ProviderInfo[]>("/v1/providers");
-}
-
-export async function connectProvider(provider: string, apiKey: string) {
-  return daemonRequest(`/v1/providers/${provider}/connect`, {
-    method: "PUT",
-    body: { api_key: apiKey },
-  });
+export async function localAIStatus(): Promise<LocalAIStatus> {
+  return daemonRequest<LocalAIStatus>("/v1/local-ai/status");
 }

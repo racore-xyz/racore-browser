@@ -18,7 +18,7 @@ React components
              racored Go daemon
 ```
 
-The Rust layer is intentionally a narrow broker. It does not duplicate provider, vault, authority, IPFS, or mesh logic. `racored` retains those responsibilities and the established REST/JSON schemas.
+The Rust layer is intentionally a narrow broker. It does not duplicate local AI, authority, IPFS, or mesh logic. `racored` retains those responsibilities and the established REST/JSON schemas.
 
 The main webview receives the capability in `src-tauri/capabilities/main.json`. Remote HTTP(S) browsing windows use labels outside that capability, a separate persistent data directory, restricted navigation, and denied popups.
 

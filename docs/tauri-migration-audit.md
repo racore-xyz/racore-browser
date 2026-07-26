@@ -5,7 +5,7 @@ Status: Step 1 complete on 2026-07-22. This document is the migration contract f
 ## Agreed boundaries
 
 - Keep React and the existing Racore UI.
-- Preserve the frontend-to-daemon HTTP workflow and JSON schemas. The Go daemon remains the authority for providers, vault data, IPFS, domains, and mesh operations.
+- Preserve the frontend-to-daemon HTTP workflow and JSON schemas. The Go daemon remains the authority for local AI, IPFS, domains, and mesh operations.
 - Do not modify `god/internal/mesh/**` during this migration.
 - Remove Electron from the shipped application and use the current stable Tauri v2 ecosystem.
 - Do not ship Node.js, Electron, `.node` native bindings, or `node-gyp` output. Native modules used only by the frontend build toolchain are development inputs and must never be bundled into the desktop application.
@@ -59,10 +59,8 @@ The preload bridge exposes `status`, `api`, `platform`, `openBrowser`, `openExte
 The compatibility adapter must continue accepting the existing method/path/body workflow for:
 
 - `GET /health`
-- `GET /v1/providers`
-- `PUT /v1/providers/{provider}/connect`
-- `DELETE /v1/providers/{provider}`
-- `GET /v1/providers/{provider}/health`
+- `GET /v1/local-ai/status`
+- `POST /v1/chat`
 - `POST /v1/chat`
 - `GET /v1/mesh/status`
 - `GET /v1/mesh/peers`
@@ -103,7 +101,7 @@ On startup Electron starts the packaged UI server, starts or reuses `racored`, p
 
 - Electron and electron-builder are removed after the Tauri build is functional.
 - The packaged Node HTTP/Vinext SSR runtime is removed from the desktop path by generating static React assets for `frontendDist`.
-- `racored` remains Go rather than being rewritten in Rust. Rewriting its provider, vault, IPFS, authority, and mesh subsystems would change the established workflow and schema and is outside this shell migration.
+- `racored` remains Go rather than being rewritten in Rust. Rewriting its local AI, IPFS, authority, and mesh subsystems would change the established workflow and schema and is outside this shell migration.
 - Kubo remains an external executable managed by `racored`; Tauri passes its trusted bundled path through `RACORE_KUBO_PATH`.
 - Rust owns process supervision, health polling, loopback HTTP proxying, URL validation, platform metadata, and window lifecycle.
 

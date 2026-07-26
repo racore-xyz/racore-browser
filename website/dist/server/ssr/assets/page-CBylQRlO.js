@@ -2,17 +2,6 @@ import { a as require_react, s as __toESM, t as require_jsx_runtime } from "../i
 //#region app/page.tsx
 var import_react = /* @__PURE__ */ __toESM(require_react(), 1);
 var import_jsx_runtime = require_jsx_runtime();
-var providers = [
-	"OpenAI",
-	"Anthropic",
-	"Gemini",
-	"OpenRouter",
-	"Kimi",
-	"Ollama",
-	"OpenCode",
-	"Claude Code",
-	"Kimi Code"
-];
 var architecture = [
 	{
 		n: "01",
@@ -22,7 +11,7 @@ var architecture = [
 	{
 		n: "02",
 		title: "Local control plane",
-		body: "The Go daemon keeps provider keys, approvals, identity, publishing, and peer connections on your machine."
+		body: "The Go daemon keeps AI planning, approvals, identity, publishing, and peer connections on your machine."
 	},
 	{
 		n: "03",
@@ -39,7 +28,7 @@ var flow = [
 	[
 		"02",
 		"PLAN",
-		"The agent chooses tools and the right provider."
+		"The bundled local model chooses a browser tool."
 	],
 	[
 		"03",
@@ -117,9 +106,9 @@ function Home() {
 								children: "Protocol"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-								href: "#providers",
+								href: "#local-ai",
 								onClick: () => setMenuOpen(false),
-								children: "Providers"
+								children: "Local AI"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
 								href: "#safety",
@@ -372,9 +361,9 @@ function Home() {
 								"data-reveal": true,
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "03" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: ["AES", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("sup", { children: "256" })] }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Encrypted secrets" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Provider credentials are protected at rest in the local vault." })
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: ["0.5", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("sup", { children: "B" })] }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Bundled intelligence" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "The browser planner runs locally with no model account or API key." })
 								]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
@@ -392,11 +381,11 @@ function Home() {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 				className: "providers section-grid",
-				id: "providers",
+				id: "local-ai",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "section-kicker",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "04" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "PROVIDER FREEDOM" })]
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "04" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "LOCAL INTELLIGENCE" })]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "provider-heading",
@@ -404,28 +393,32 @@ function Home() {
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "eyebrow",
-								children: "Bring the intelligence you trust"
+								children: "Private by architecture"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", { children: [
-								"Nine providers.",
+								"One small model.",
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("br", {}),
-								"One ",
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("em", { children: "gateway." })
+								"Zero ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("em", { children: "cloud routes." })
 							] }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Connect cloud models, local runtimes, or coding agents. Racore routes requests through a consistent interface while keys remain under your control." })
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Hammer 2.0 0.5B is bundled with Racore and runs through llama.cpp as a browser-first tool planner." })
 						]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						className: "provider-stack",
-						"aria-label": "Supported AI providers",
-						children: providers.map((provider, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						"aria-label": "Bundled local AI",
+						children: [
+							"Hammer 2.0 0.5B",
+							"llama.cpp CPU runtime",
+							"Racore browser tools"
+						].map((component, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							style: { "--i": index },
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: String(index + 1).padStart(2, "0") }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: provider }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("i", { children: index < 5 ? "CLOUD" : "LOCAL" })
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: component }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("i", { children: "LOCAL" })
 							]
-						}, provider))
+						}, component))
 					})
 				]
 			}),
@@ -495,7 +488,7 @@ function Home() {
 								className: "map-column",
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "INTERFACE" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "React + Next.js" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Agentic browser, sites, providers, network, and system views." })] }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "React + Next.js" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Agentic browser, sites, local AI, network, and system views." })] }),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Electron / Tauri" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Desktop packaging and a secure bridge to the local runtime." })] })
 								]
 							}),
@@ -513,7 +506,7 @@ function Home() {
 								className: "map-column map-column-right",
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "CONTROL PLANE" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "racored / Go" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "REST + WebSocket API, approvals, gateway, vault, and orchestration." })] }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "racored / Go" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "REST + WebSocket API, local AI planning, approvals, and orchestration." })] }),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: "Protocol + storage" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "DID identity, signed messages, domain authority, mesh, and IPFS." })] })
 								]
 							})
@@ -581,8 +574,8 @@ function Home() {
 							children: "Protocol"
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-							href: "#providers",
-							children: "Providers"
+							href: "#local-ai",
+							children: "Local AI"
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
 							href: "/browser",

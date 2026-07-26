@@ -51,7 +51,7 @@ Most AI browsers optimize for automation. Racore optimizes for **agency**: the a
   </tr>
   <tr>
     <td align="center"><b>Discover the system</b><br/><sub>An editorial introduction to the agentic browser and open protocol.</sub></td>
-    <td align="center"><b>Choose your boundaries</b><br/><sub>Configure privacy, providers, and network participation before entering.</sub></td>
+    <td align="center"><b>Choose your boundaries</b><br/><sub>Confirm local AI privacy and network participation before entering.</sub></td>
   </tr>
 </table>
 
@@ -73,7 +73,7 @@ flowchart TB
     Human([Human]) -->|goal + approval| React[React 19 workspace]
     React -->|typed invoke / events| Tauri[Tauri v2 + Rust]
     Tauri -->|allowlisted loopback HTTP| Daemon[racored · Go control plane]
-    Daemon --> Providers[AI provider gateway]
+    Daemon --> LocalAI[Bundled Hammer 2.0 planner]
     Daemon --> Vault[Encrypted local vault]
     Daemon --> Authority[Identity + domain authority]
     Daemon --> Kubo[IPFS / Kubo]
@@ -91,7 +91,7 @@ flowchart TB
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │ React UI                                                    │
-│ browser · sites · providers · network · system              │
+│ browser · sites · local AI · network · system               │
 └──────────────────────────┬──────────────────────────────────┘
                            │ strongly typed commands + events
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -101,7 +101,7 @@ flowchart TB
                            │ fixed origin · allowlisted routes
 ┌──────────────────────────▼──────────────────────────────────┐
 │ racored / Go                                                │
-│ approvals · provider gateway · vault · authority · protocol │
+│ approvals · local model planner · authority · protocol      │
 └──────────┬─────────────────────┬───────────────────────┬────┘
            ▼                     ▼                       ▼
        AI models              IPFS/Kubo              peer mesh
@@ -209,7 +209,7 @@ racore-browser/
 
 1. **Local first** — private state and control live close to the user.
 2. **Human in the loop** — delegation never erases consent.
-3. **Portable intelligence** — models are providers, not prisons.
+3. **Private intelligence** — the browser planner runs locally without model API keys.
 4. **Proof over promises** — identity and releases should be independently verifiable.
 5. **Open infrastructure** — content and authority should survive a platform.
 
