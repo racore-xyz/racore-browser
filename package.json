@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "racore": "node protocol/cli.mjs",
     "protocol:test": "node --test tests/protocol.test.mjs",
+    "local-ai:prepare": "node scripts/prepare-local-ai.mjs",
     "desktop": "npm run tauri:dev",
     "desktop:dev": "npm run tauri:dev",
     "desktop:package": "npm run tauri:build",
