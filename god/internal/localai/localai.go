@@ -109,7 +109,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.mu.Unlock()
 	}()
 
-	for attempt := 0; attempt < 60; attempt++ {
+	for attempt := 0; attempt < 240; attempt++ {
 		if m.ready(ctx) {
 			return nil
 		}
@@ -120,7 +120,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		}
 	}
 	m.Stop()
-	return m.fail("local model did not become ready within 15 seconds")
+	return m.fail("local model did not become ready within 60 seconds")
 }
 
 func (m *Manager) Stop() {
@@ -141,6 +141,8 @@ func (m *Manager) Status(ctx context.Context) api.LocalAIStatus {
 	state := "offline"
 	if ready {
 		state = "ready"
+	} else if m.command != nil {
+		state = "starting"
 	} else if lastErr != "" {
 		state = "error"
 	}
@@ -260,14 +262,22 @@ func buildPrompt(messages []map[string]string, system string) string {
 
 func parsePlan(raw string) ([]api.BrowserAction, string) {
 	raw = strings.TrimSpace(strings.TrimSuffix(raw, "<|im_end|>"))
-	if start, end := strings.Index(raw, "["), strings.LastIndex(raw, "]"); start >= 0 && end >= start {
-		raw = raw[start : end+1]
-	}
-	var calls []struct {
+	type toolCall struct {
 		Name      string            `json:"name"`
 		Arguments map[string]string `json:"arguments"`
 	}
-	if err := json.Unmarshal([]byte(raw), &calls); err != nil {
+	var calls []toolCall
+	if start, end := strings.Index(raw, "["), strings.LastIndex(raw, "]"); start >= 0 && end >= start {
+		raw = raw[start : end+1]
+		_ = json.Unmarshal([]byte(raw), &calls)
+	} else if start, end := strings.Index(raw, "{"), strings.LastIndex(raw, "}"); start >= 0 && end >= start {
+		raw = raw[start : end+1]
+		var call toolCall
+		if json.Unmarshal([]byte(raw), &call) == nil {
+			calls = []toolCall{call}
+		}
+	}
+	if len(calls) == 0 {
 		return nil, "The local planner returned an invalid plan. Please rephrase the request."
 	}
 	actions := make([]api.BrowserAction, 0, len(calls))

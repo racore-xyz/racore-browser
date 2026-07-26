@@ -76,9 +76,11 @@ func New(cfg api.Config) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	if err := s.localAI.Start(ctx); err != nil {
-		log.Printf("local AI start: %v", err)
-	}
+	go func() {
+		if err := s.localAI.Start(ctx); err != nil {
+			log.Printf("local AI start: %v", err)
+		}
+	}()
 	if _, err := s.kubo.Start(ctx); err != nil {
 		log.Printf("kubo start: %v", err)
 	}

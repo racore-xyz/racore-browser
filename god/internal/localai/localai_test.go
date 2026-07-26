@@ -76,3 +76,10 @@ func TestPlanAcceptsModelCodeFence(t *testing.T) {
 		t.Fatalf("unexpected fenced plan: %#v", actions)
 	}
 }
+
+func TestPlanAcceptsSingleToolObjectFromSmallModel(t *testing.T) {
+	actions, _ := parsePlan("```\n{\"name\":\"search_web\",\"arguments\":{\"query\":\"Racore browser\"}}\n```")
+	if len(actions) != 1 || actions[0].Type != "search_web" {
+		t.Fatalf("unexpected single-object plan: %#v", actions)
+	}
+}

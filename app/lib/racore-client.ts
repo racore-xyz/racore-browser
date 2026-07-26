@@ -4,7 +4,7 @@ const LOCAL_DAEMON = "http://127.0.0.1:47831";
 
 export type LocalAIStatus = {
   ready: boolean;
-  state: "ready" | "offline" | "error";
+  state: "ready" | "starting" | "offline" | "error";
   model: string;
   label: string;
   engine: string;
