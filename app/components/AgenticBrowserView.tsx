@@ -26,6 +26,7 @@ type BrowserTab = {
   title: string;
   query: string;
   messages: ChatMessage[];
+  mediaUrl?: string;
 };
 type Health = {
   mesh: { online: boolean; peers: number };
@@ -39,6 +40,19 @@ const suggestions = [
 ];
 
 const STORAGE_KEY = "racore:browser-tabs:v1";
+const DIRECT_VIDEO_PATTERN = /\.(mp4|webm|ogv|ogg)(?:[?#].*)?$/i;
+
+function isDirectVideoUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      DIRECT_VIDEO_PATTERN.test(value)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function createTab(): BrowserTab {
   return {
@@ -67,6 +81,7 @@ export function AgenticBrowserView() {
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const query = activeTab?.query ?? "";
   const messages = activeTab?.messages ?? [];
+  const mediaUrl = activeTab?.mediaUrl;
   const isUrl = useMemo(
     () => /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/.*)?$/i.test(query.trim()),
     [query],
@@ -104,7 +119,8 @@ export function AgenticBrowserView() {
             typeof tab.id === "string" &&
             typeof tab.title === "string" &&
             typeof tab.query === "string" &&
-            Array.isArray(tab.messages),
+            Array.isArray(tab.messages) &&
+            (tab.mediaUrl === undefined || isDirectVideoUrl(tab.mediaUrl)),
         );
         if (!restored?.length) return;
         setTabs(restored);
@@ -170,10 +186,27 @@ export function AgenticBrowserView() {
     const input = query.trim();
     if (!input) return;
     if (isUrl) {
+      const normalized = /^https?:/i.test(input) ? input : `https://${input}`;
+      if (isDirectVideoUrl(normalized)) {
+        const videoUrl = new URL(normalized);
+        const filename =
+          decodeURIComponent(videoUrl.pathname.split("/").pop() || "") ||
+          "Video";
+        updateActiveTab((tab) => ({
+          ...tab,
+          title: filename.slice(0, 42),
+          query: "",
+          messages: [],
+          mediaUrl: normalized,
+        }));
+        setError("");
+        setEvents(["Direct video opened in Racore's private player"]);
+        return;
+      }
       if (isDesktopApp()) await desktopBridge.openBrowser(input);
       else
         window.open(
-          /^https?:/.test(input) ? input : `https://${input}`,
+          normalized,
           "_blank",
           "noopener,noreferrer",
         );
@@ -190,6 +223,7 @@ export function AgenticBrowserView() {
       ...tab,
       title: tab.messages.length ? tab.title : input.slice(0, 42),
       query: "",
+      mediaUrl: undefined,
       messages: [...tab.messages, { role: "user", content: input }],
     }));
     try {
@@ -278,7 +312,43 @@ export function AgenticBrowserView() {
         <button aria-label="Menu">⋮</button>
       </div>
       <main className="real-page">
-        {!messages.length && !loading && !error ? (
+        {mediaUrl ? (
+          <section className="browser-video-page">
+            <header>
+              <button
+                className="back-home"
+                onClick={() =>
+                  updateActiveTab((tab) => ({
+                    ...tab,
+                    title: "New tab",
+                    mediaUrl: undefined,
+                  }))
+                }
+              >
+                ← New task
+              </button>
+              <div>
+                <h1>{activeTab.title}</h1>
+                <p>{new URL(mediaUrl).hostname}</p>
+              </div>
+            </header>
+            <div className="browser-video-stage">
+              <video
+                src={mediaUrl}
+                controls
+                playsInline
+                preload="metadata"
+              >
+                Your system webview cannot play this video format.
+              </video>
+            </div>
+            <div className="verified-events">
+              {events.map((item) => (
+                <span key={item}>✓ {item}</span>
+              ))}
+            </div>
+          </section>
+        ) : !messages.length && !loading && !error ? (
           <section className="simple-home">
             <Image
               src="/brand/racore-logo.png"
@@ -345,6 +415,7 @@ export function AgenticBrowserView() {
                   title: "New tab",
                   query: "",
                   messages: [],
+                  mediaUrl: undefined,
                 }));
                 setError("");
                 setEvents([]);

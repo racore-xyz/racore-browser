@@ -14,3 +14,19 @@ test("browser tabs persist and AI requests carry conversation history", async ()
   assert.match(source, /\.\.\.messages\.map\(\(\{ role, content \}\)/);
   assert.match(source, /Continue the conversation or enter a website/);
 });
+
+test("direct video links open in the in-tab native media player", async () => {
+  const [component, config] = await Promise.all([
+    readFile(
+      new URL("../app/components/AgenticBrowserView.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(component, /DIRECT_VIDEO_PATTERN/);
+  assert.match(component, /<video/);
+  assert.match(component, /controls/);
+  assert.match(component, /playsInline/);
+  assert.match(config, /media-src https: http: blob:/);
+});
