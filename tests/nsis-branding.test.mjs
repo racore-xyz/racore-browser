@@ -49,3 +49,10 @@ test("NSIS bitmap assets use the required dimensions and 24-bit color", async ()
     bitsPerPixel: 24,
   });
 });
+
+test("transparent Racore wordmark is retained as the NSIS design source", async () => {
+  const logo = await readFile(
+    new URL("../src-tauri/windows/nsis/racore-logo-transparent.png", import.meta.url),
+  );
+  assert.equal(logo.toString("hex", 1, 4), "504e47");
+});
