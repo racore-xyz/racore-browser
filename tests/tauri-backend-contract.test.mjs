@@ -78,7 +78,35 @@ test("UDP syscall adapters preserve the no-mesh-change boundary", async () => {
       "utf8",
     ),
   ]);
-  assert.match(transport, /setReuseAddress\(file\.Fd\(\)\)/);
+  assert.match(transport, /Control: func/);
+  assert.match(transport, /setReuseAddress\(fd\)/);
+  assert.match(transport, /listenConfig\.ListenPacket/);
+  assert.ok(
+    transport.indexOf("listenConfig.ListenPacket") <
+      transport.indexOf("ipv4.NewPacketConn"),
+    "socket options must be applied before the multicast bind",
+  );
+  assert.match(transport, /runtime\.GOOS != "windows"/);
   assert.match(windows, /syscall\.Handle\(fd\)/);
   assert.match(unix, /int\(fd\)/);
 });
+
+test("window commands defer creation to the event loop", async () => {
+  const [commands, windows] = await Promise.all([
+    readFile(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8"),
+    readFile(new URL("../src-tauri/src/windows.rs", import.meta.url), "utf8"),
+  ]);
+  assert.match(commands, /pub async fn open_browser/);
+  assert.match(commands, /pub async fn browser_action/);
+  assert.match(windows, /run_on_main_thread/);
+});
+
+test("desktop detection requires the live Tauri IPC bridge", async () => {
+  const source = await readFile(
+    new URL("../app/lib/desktop.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /"__TAURI_INTERNALS__" in window/);
+  assert.doesNotMatch(source, /dataset\.desktop === "tauri"/);
+});
+

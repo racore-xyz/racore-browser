@@ -7,6 +7,9 @@ const projectPath = (path: string) =>
 
 export default defineConfig({
   root: projectPath("desktop-ui"),
+  // Relative asset URLs keep the build loadable from tauri://localhost and from
+  // any /ipfs/<cid>/ path on a gateway, not just a domain root.
+  base: "./",
   publicDir: projectPath("public"),
   plugins: [react()],
   resolve: {

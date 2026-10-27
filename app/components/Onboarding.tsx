@@ -1,25 +1,39 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { checkDaemon } from "../lib/racore-client";
 
 const steps = ["Welcome", "Privacy", "AI", "Network", "Ready"];
 
+type Health = {
+  mesh?: { online?: boolean; peers?: number };
+  ipfs?: { online?: boolean };
+};
+
 export function Onboarding({ onFinish }: { onFinish: () => void }) {
   const [step, setStep] = useState(0);
-  const [nodeMode, setNodeMode] = useState(true);
-  const [daemon, setDaemon] = useState(false);
+  const [health, setHealth] = useState<Health | null>(null);
 
   useEffect(() => {
-    checkDaemon().then((value) => setDaemon(Boolean(value)));
+    let active = true;
+    const refresh = () =>
+      checkDaemon().then((value) => {
+        if (active) setHealth((value as unknown as Health) ?? null);
+      });
+    void refresh();
+    const timer = window.setInterval(refresh, 4000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
+  const daemon = health !== null;
+  const meshOnline = Boolean(health?.mesh?.online);
+  const ipfsOnline = Boolean(health?.ipfs?.online);
+
   function finish() {
-    localStorage.setItem(
-      "racore:onboarded",
-      JSON.stringify({ intelligence: "local", nodeMode, at: Date.now() }),
-    );
+    localStorage.setItem("racore:onboarded", JSON.stringify({ at: Date.now() }));
     onFinish();
   }
 
@@ -27,7 +41,11 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     <div className="onboarding">
       <aside className="onboarding-brand">
         <div className="logo-frame">
-          <Image src="/brand/racore-logo.png" alt="Racore.xyz" width={265} height={66} priority />
+          <div className="terminal-wordmark compact" aria-label="Racore.xyz" role="img">
+            <span>RACORE</span>
+            <b>.XYZ</b>
+            <i>▮</i>
+          </div>
         </div>
         <div className="onboarding-copy">
           <span>THE AGENTIC WEB</span>
@@ -163,37 +181,39 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
                 <div className="network-details">
                   <label>
                     <span>
-                      <b>Join Racore Mesh</b>
+                      <b>Racore Mesh</b>
                       <small>
-                        Discover peers and exchange signed availability events.
+                        Signed UDP discovery on 239.255.77.77:47777 while the
+                        desktop app runs.
                       </small>
                     </span>
-                    <button
-                      className={`toggle ${nodeMode ? "on" : ""}`}
-                      onClick={() => setNodeMode(!nodeMode)}
-                    >
-                      <i />
-                    </button>
+                    <em className={meshOnline ? "network-live" : ""}>
+                      {meshOnline
+                        ? `● ONLINE · ${health?.mesh?.peers ?? 0} PEERS`
+                        : "○ OFFLINE"}
+                    </em>
                   </label>
                   <label>
                     <span>
-                      <b>Use local IPFS</b>
+                      <b>Local IPFS (Kubo)</b>
                       <small>
-                        Connect to Kubo on ports 5001 and 8080 when available.
+                        Managed automatically by racored. Content API on 127.0.0.1:5001,
+                        gateway on 127.0.0.1:8180.
                       </small>
                     </span>
-                    <em>AUTO-DETECT</em>
+                    <em className={ipfsOnline ? "network-live" : ""}>
+                      {ipfsOnline ? "● READY" : "○ NOT DETECTED"}
+                    </em>
                   </label>
                   <label>
                     <span>
-                      <b>Storage allowance</b>
-                      <small>Maximum cache Racore may use.</small>
+                      <b>Background operation</b>
+                      <small>
+                        Mesh, IPFS, and the local model stop when Racore Desktop
+                        quits. Nothing runs as a system service.
+                      </small>
                     </span>
-                    <select defaultValue="5">
-                      <option value="1">1 GB</option>
-                      <option value="5">5 GB</option>
-                      <option value="20">20 GB</option>
-                    </select>
+                    <em>SESSION ONLY</em>
                   </label>
                 </div>
               </div>
@@ -219,7 +239,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
                   <b>1</b> bundled AI model
                 </span>
                 <span>
-                  <b>{nodeMode ? "On" : "Off"}</b> mesh node
+                  <b>{meshOnline ? "On" : "Off"}</b> mesh node
                 </span>
               </div>
             </section>

@@ -1,13 +1,75 @@
 package server
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/racore/god/internal/authority"
+	"github.com/racore/god/internal/ipfs"
 	"github.com/racore/god/pkg/api"
 )
+
+type releaseView struct {
+	Version   string `json:"version"`
+	CID       string `json:"cid"`
+	ReleaseID string `json:"releaseId"`
+	CreatedAt int64  `json:"createdAt"`
+	Files     int    `json:"files"`
+	Size      int    `json:"size"`
+	Verified  bool   `json:"verified"`
+}
+
+type domainView struct {
+	Domain     string        `json:"domain"`
+	Controller string        `json:"controller"`
+	CreatedAt  int64         `json:"createdAt"`
+	Status     string        `json:"status"`
+	Current    string        `json:"current,omitempty"`
+	Releases   []releaseView `json:"releases"`
+	Delegates  int           `json:"delegates"`
+}
+
+func validateReleaseManifest(domain string, manifest api.ReleaseManifest) error {
+	if !authority.IsRacoreDomain(domain) {
+		return fmt.Errorf("unsupported Racore domain")
+	}
+	version := strings.TrimSpace(manifest.Version)
+	if version == "" || len(version) > 64 || strings.ContainsAny(version, " \t\r\n") {
+		return fmt.Errorf("invalid release version")
+	}
+	if !authority.IsSafeCID(manifest.CID) {
+		return fmt.Errorf("invalid content identifier")
+	}
+	if len(manifest.ContentRoot) != 64 {
+		return fmt.Errorf("content root must be a SHA-256 hex digest")
+	}
+	if _, err := hex.DecodeString(manifest.ContentRoot); err != nil {
+		return fmt.Errorf("content root must be a SHA-256 hex digest")
+	}
+	entrypoint := strings.ReplaceAll(strings.TrimSpace(manifest.Entrypoint), "\\", "/")
+	if entrypoint == "" ||
+		strings.HasPrefix(entrypoint, "/") ||
+		strings.Contains(entrypoint, "..") {
+		return fmt.Errorf("invalid entrypoint")
+	}
+	if manifest.Files < 1 || manifest.Size < 1 {
+		return fmt.Errorf("release must contain at least one byte and one file")
+	}
+	return nil
+}
+
+func (s *Server) shutdownHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		writeError(w, 405, "method not allowed")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "shuttingDown": true})
+	s.once.Do(func() { close(s.done) })
+}
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	ipfsStatus, _ := s.ipfs.Status(r.Context())
@@ -71,37 +133,55 @@ func (s *Server) ipfsAddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(100 << 20); err != nil {
+	if err := r.ParseMultipartForm(256 << 20); err != nil {
 		writeError(w, 400, "multipart parse error")
 		return
 	}
 
-	file, header, err := r.FormFile("file")
-	if err != nil {
+	headers := r.MultipartForm.File["file"]
+	if len(headers) == 0 {
 		writeError(w, 400, "file required")
 		return
 	}
-	defer file.Close()
 
-	data, err := io.ReadAll(file)
-	if err != nil {
-		writeError(w, 500, "read error")
-		return
+	// Multipart filenames are reduced to their base name by the server-side
+	// parser, so publish clients send the original relative paths separately.
+	var paths []string
+	if values := r.MultipartForm.Value["paths"]; len(values) > 0 {
+		if err := json.Unmarshal([]byte(values[0]), &paths); err != nil {
+			writeError(w, 400, "invalid paths manifest")
+			return
+		}
 	}
 
-	name := header.Filename
-	if name == "" {
-		name = "upload.bin"
+	files := make([]ipfs.File, 0, len(headers))
+	for index, header := range headers {
+		file, err := header.Open()
+		if err != nil {
+			writeError(w, 400, "read error")
+			return
+		}
+		data, err := io.ReadAll(file)
+		file.Close()
+		if err != nil {
+			writeError(w, 400, "read error")
+			return
+		}
+		name := header.Filename
+		if index < len(paths) && paths[index] != "" {
+			name = paths[index]
+		}
+		files = append(files, ipfs.File{Name: name, Data: data})
 	}
 
-	result, err := s.ipfs.AddBytes(r.Context(), name, data)
+	result, err := s.ipfs.AddFiles(r.Context(), files)
 	if err != nil {
 		writeError(w, 503, "kubo unavailable: "+err.Error())
 		return
 	}
 
-	s.mesh.Broadcast("release.available", map[string]any{
-		"cid": result["cid"], "name": result["name"],
+	s.mesh.Broadcast("ipfs.added", map[string]any{
+		"cid": result["cid"], "files": result["files"],
 	})
 
 	writeJSON(w, 200, result)
@@ -159,7 +239,36 @@ func (s *Server) meshBroadcastHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) domainsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		writeJSON(w, 200, s.author.List())
+		items := s.author.List()
+		out := make([]domainView, 0, len(items))
+		for _, info := range items {
+			view := domainView{
+				Domain:     info.Domain,
+				Controller: info.Controller,
+				CreatedAt:  info.CreatedAt,
+				Status:     "claimed",
+				Releases:   make([]releaseView, 0, len(info.Releases)),
+				Delegates:  len(info.Delegates),
+			}
+			for _, release := range info.Releases {
+				view.Releases = append(view.Releases, releaseView{
+					Version:   release.Manifest.Version,
+					CID:       release.Manifest.CID,
+					ReleaseID: release.ReleaseID,
+					CreatedAt: release.Manifest.CreatedAt,
+					Files:     release.Manifest.Files,
+					Size:      release.Manifest.Size,
+					Verified:  authority.VerifyRelease(info.Controller, release.ReleaseID, release.Manifest) == nil,
+				})
+			}
+			if len(info.Releases) > 0 {
+				latest := info.Releases[len(info.Releases)-1]
+				view.Status = "live"
+				view.Current = latest.Manifest.CID
+			}
+			out = append(out, view)
+		}
+		writeJSON(w, 200, out)
 	case "POST":
 		var body struct {
 			Domain string `json:"domain"`
@@ -168,13 +277,18 @@ func (s *Server) domainsHandler(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "invalid body")
 			return
 		}
-		info, dns, err := s.author.Create(body.Domain)
+		domain := strings.ToLower(strings.TrimSpace(body.Domain))
+		if !authority.IsRacoreDomain(domain) {
+			writeError(w, 400, "use a .racore, .rac, .core, or .ra domain")
+			return
+		}
+		info, dns, err := s.author.Create(domain)
 		if err != nil {
 			writeError(w, 409, err.Error())
 			return
 		}
 		s.mesh.Broadcast("domain.claim", map[string]any{
-			"domain":     body.Domain,
+			"domain":     info.Domain,
 			"controller": info.Controller,
 		})
 		writeJSON(w, 200, map[string]any{
@@ -200,17 +314,24 @@ func (s *Server) resolveDomainHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	domain := strings.TrimPrefix(r.URL.Path, "/v1/authority/resolve/")
-	resolved, err := s.author.ResolveNetworkDomain(domain)
+	resolved, err := s.author.ResolveVerifiedNetworkDomain(domain)
 	if err != nil {
-		writeError(w, 404, err.Error())
+		writeError(w, 422, err.Error())
 		return
 	}
-	writeJSON(w, 200, map[string]any{
+	payload := map[string]any{
 		"domain": resolved.Domain, "controller": resolved.Controller,
 		"source": resolved.Source, "nodeId": resolved.NodeID,
 		"releaseId": resolved.ReleaseID, "cid": resolved.CID,
+		"verified":   true,
 		"gatewayUrl": strings.TrimRight(s.cfg.IPFSGateway, "/") + "/ipfs/" + resolved.CID + "/",
-	})
+	}
+	if resolved.Manifest != nil {
+		payload["version"] = resolved.Manifest.Version
+		payload["entrypoint"] = resolved.Manifest.Entrypoint
+		payload["manifest"] = resolved.Manifest
+	}
+	writeJSON(w, 200, payload)
 }
 
 func (s *Server) domainByIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -245,13 +366,20 @@ func (s *Server) domainByIDHandler(w http.ResponseWriter, r *http.Request) {
 				writeError(w, 400, "invalid body")
 				return
 			}
+			if err := validateReleaseManifest(domain, manifest); err != nil {
+				writeError(w, 400, err.Error())
+				return
+			}
 			result, err := s.author.PublishRelease(domain, manifest)
 			if err != nil {
 				writeError(w, 404, err.Error())
 				return
 			}
+			releases, _ := s.author.Releases(domain)
+			entry := releases[len(releases)-1]
 			s.mesh.Broadcast("release.available", map[string]any{
-				"domain": domain, "releaseId": result.CID, "cid": result.CID,
+				"domain": domain, "releaseId": entry.ReleaseID,
+				"cid": entry.Manifest.CID, "manifest": entry.Manifest,
 			})
 			writeJSON(w, 200, result)
 		default:

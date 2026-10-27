@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/racore/god/internal/authority"
@@ -26,6 +27,8 @@ type Server struct {
 	hub     *Hub
 	version string
 	httpSrv *http.Server
+	done    chan struct{}
+	once    sync.Once
 }
 
 func New(cfg api.Config) *Server {
@@ -47,6 +50,7 @@ func New(cfg api.Config) *Server {
 		mesh:    mn,
 		hub:     NewHub(),
 		version: "0.2.0",
+		done:    make(chan struct{}),
 	}
 
 	mn.SetEventSink(func(ev map[string]any) {
@@ -65,7 +69,16 @@ func New(cfg api.Config) *Server {
 					releaseID, _ := data["releaseId"].(string)
 					cid, _ := data["cid"].(string)
 					nodeID, _ := ev["nodeId"].(string)
-					auth.ObserveRelease(domain, releaseID, cid, nodeID)
+					var manifest *api.ReleaseManifest
+					if raw, ok := data["manifest"].(map[string]any); ok {
+						if encoded, err := json.Marshal(raw); err == nil {
+							var parsed api.ReleaseManifest
+							if json.Unmarshal(encoded, &parsed) == nil {
+								manifest = &parsed
+							}
+						}
+					}
+					auth.ObserveRelease(domain, releaseID, cid, nodeID, manifest)
 				}
 			}
 		}
@@ -105,6 +118,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/authority/network-domains", s.networkDomainsHandler)
 	mux.HandleFunc("/v1/authority/resolve/", s.resolveDomainHandler)
 	mux.HandleFunc("/v1/events", s.wsHandler)
+	mux.HandleFunc("/v1/shutdown", s.shutdownHandler)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.httpSrv = &http.Server{
@@ -131,6 +145,10 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+func (s *Server) Done() <-chan struct{} {
+	return s.done
+}
+
 func (s *Server) Stop() {
 	s.mesh.Stop()
 	s.kubo.Stop()
@@ -146,6 +164,10 @@ var allowedOrigins = map[string]bool{
 	"http://localhost:3000":  true,
 	"http://127.0.0.1:3000":  true,
 	"http://[::1]:3000":      true,
+	"http://localhost:1420":  true,
+	"http://127.0.0.1:1420":  true,
+	"http://localhost:1421":  true,
+	"http://127.0.0.1:1421":  true,
 	"http://127.0.0.1:47832": true,
 	"https://racore.xyz":     true,
 }

@@ -121,21 +121,44 @@ impl AppState {
             }
             tokio::time::sleep(Duration::from_millis(350)).await;
         }
-        self.stop_owned_daemon();
+        self.kill_owned_daemon();
         Err(CommandError::backend(
             "racored did not become ready within 15 seconds",
         ))
     }
 
     pub fn stop_owned_daemon(&self) {
-        let child = self
-            .process
+        let Some(child) = self.take_child() else {
+            return;
+        };
+
+        // Ask racored to close its own Kubo/llama children before the sidecar is
+        // killed, otherwise those grandchildren stay alive after the app quits.
+        tauri::async_runtime::block_on(async {
+            if self.daemon.shutdown().await.is_ok() {
+                for _ in 0..20 {
+                    if self.daemon.health().await.is_err() {
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                }
+            }
+        });
+
+        let _ = child.kill();
+    }
+
+    pub fn kill_owned_daemon(&self) {
+        if let Some(child) = self.take_child() {
+            let _ = child.kill();
+        }
+    }
+
+    fn take_child(&self) -> Option<CommandChild> {
+        self.process
             .lock()
             .unwrap_or_else(|lock| lock.into_inner())
             .child
-            .take();
-        if let Some(child) = child {
-            let _ = child.kill();
-        }
+            .take()
     }
 }

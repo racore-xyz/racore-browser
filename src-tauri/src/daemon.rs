@@ -43,6 +43,23 @@ impl DaemonClient {
             .map_err(|error| CommandError::backend(error.to_string()))
     }
 
+    pub async fn shutdown(&self) -> CommandResult<()> {
+        let response = self
+            .client
+            .post(format!("{DAEMON_ORIGIN}/v1/shutdown"))
+            .timeout(Duration::from_secs(2))
+            .send()
+            .await
+            .map_err(|error| CommandError::backend(error.to_string()))?;
+        if !response.status().is_success() {
+            return Err(CommandError::backend(format!(
+                "racored shutdown returned {}",
+                response.status().as_u16()
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn request(&self, request: DaemonRequest) -> CommandResult<DaemonResponse> {
         let validated = ValidatedRequest::try_from(request)?;
         let url = format!("{DAEMON_ORIGIN}{}", validated.path);
@@ -160,13 +177,25 @@ fn route_allows(method: &Method, path: &str) -> bool {
         | (&Method::GET, ["v1", "mesh", "peers"])
         | (&Method::POST, ["v1", "mesh", "broadcast"])
         | (&Method::GET, ["v1", "ipfs", "status"])
+        | (&Method::POST, ["v1", "ipfs", "add"])
         | (&Method::GET, ["v1", "authority", "domains"])
         | (&Method::GET, ["v1", "authority", "network-domains"])
         | (&Method::POST, ["v1", "authority", "domains"]) => true,
         (&Method::GET, ["v1", "authority", "domains", domain, "available"]) => safe_domain(domain),
+        (&Method::GET, ["v1", "authority", "domains", domain, "releases"]) => safe_domain(domain),
+        (&Method::POST, ["v1", "authority", "domains", domain, "releases"]) => safe_domain(domain),
+        (&Method::POST, ["v1", "ipfs", "pin", cid]) => safe_cid(cid),
         (&Method::GET, ["v1", "authority", "resolve", domain]) => safe_domain(domain),
         _ => false,
     }
+}
+
+fn safe_cid(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
 }
 
 fn safe_domain(value: &str) -> bool {
@@ -199,10 +228,14 @@ mod tests {
             ("/v1/mesh/peers", "GET"),
             ("/v1/mesh/broadcast", "POST"),
             ("/v1/ipfs/status", "GET"),
+            ("/v1/ipfs/add", "POST"),
+            ("/v1/ipfs/pin/bafybeigdyrztabcdefghijklmnop", "POST"),
             ("/v1/authority/domains", "GET"),
             ("/v1/authority/network-domains", "GET"),
             ("/v1/authority/resolve/demo.racore", "GET"),
             ("/v1/authority/domains/example.com/available", "GET"),
+            ("/v1/authority/domains/demo.racore/releases", "GET"),
+            ("/v1/authority/domains/demo.racore/releases", "POST"),
             ("/v1/authority/domains", "POST"),
         ];
         for (path, method) in routes {

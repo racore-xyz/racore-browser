@@ -4,7 +4,7 @@
 
 1. Read `CLAUDE.md` for a project overview
 2. Read the documentation in `.llms/` for detailed section-by-section guides
-3. Ensure you have Go >= 1.21 and Node.js >= 22.13.0 installed
+3. Ensure you have Go >= 1.22 and Node.js >= 22.13.0 installed
 4. Run through the full build and test suite once before making changes:
 
 ```bash
@@ -91,7 +91,7 @@ npm run build
 ### 2. Run All Tests
 
 ```bash
-# Go tests (all 12 packages with race detection)
+# Go tests (all internal packages with race detection)
 cd god && go test -race -count=1 ./internal/... && cd ..
 
 # Go static analysis

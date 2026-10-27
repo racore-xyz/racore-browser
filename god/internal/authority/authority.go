@@ -58,21 +58,24 @@ type ObservedClaim struct {
 }
 
 type ObservedRelease struct {
-	Domain    string `json:"domain"`
-	ReleaseID string `json:"releaseId"`
-	CID       string `json:"cid"`
-	NodeID    string `json:"nodeId"`
-	Timestamp int64  `json:"timestamp"`
+	Domain    string               `json:"domain"`
+	ReleaseID string               `json:"releaseId"`
+	CID       string               `json:"cid"`
+	NodeID    string               `json:"nodeId"`
+	Manifest  *api.ReleaseManifest `json:"manifest,omitempty"`
+	Timestamp int64                `json:"timestamp"`
 }
 
 type NetworkDomain struct {
-	Domain     string `json:"domain"`
-	Controller string `json:"controller"`
-	Source     string `json:"source"`
-	NodeID     string `json:"nodeId,omitempty"`
-	ReleaseID  string `json:"releaseId,omitempty"`
-	CID        string `json:"cid,omitempty"`
-	UpdatedAt  int64  `json:"updatedAt"`
+	Domain     string               `json:"domain"`
+	Controller string               `json:"controller"`
+	Source     string               `json:"source"`
+	NodeID     string               `json:"nodeId,omitempty"`
+	ReleaseID  string               `json:"releaseId,omitempty"`
+	CID        string               `json:"cid,omitempty"`
+	Manifest   *api.ReleaseManifest `json:"manifest,omitempty"`
+	Verified   bool                 `json:"verified"`
+	UpdatedAt  int64                `json:"updatedAt"`
 }
 
 var racoreSuffixes = []string{".racore", ".rac", ".core", ".ra"}
@@ -260,16 +263,20 @@ func (a *Authority) ObserveClaim(domain, controller, nodeID string) {
 	}
 }
 
-func (a *Authority) ObserveRelease(domain, releaseID, cid, nodeID string) {
+func (a *Authority) ObserveRelease(domain, releaseID, cid, nodeID string, manifest ...*api.ReleaseManifest) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	domain = strings.ToLower(strings.Trim(domain, "."))
 	if !IsRacoreDomain(domain) || !safeCID(cid) {
 		return
 	}
+	var signed *api.ReleaseManifest
+	if len(manifest) > 0 {
+		signed = manifest[0]
+	}
 	a.observedReleases[domain] = ObservedRelease{
 		Domain: domain, ReleaseID: releaseID, CID: cid,
-		NodeID: nodeID, Timestamp: time.Now().UnixMilli(),
+		NodeID: nodeID, Manifest: signed, Timestamp: time.Now().UnixMilli(),
 	}
 	if err := a.save(); err != nil {
 		log.Printf("authority: save after observed release %s: %v", domain, err)
@@ -292,6 +299,8 @@ func (a *Authority) NetworkDomains() []NetworkDomain {
 			release := info.Releases[len(info.Releases)-1]
 			item.ReleaseID = release.ReleaseID
 			item.CID = release.Manifest.CID
+			item.Manifest = &release.Manifest
+			item.Verified = VerifyRelease(info.Controller, release.ReleaseID, release.Manifest) == nil
 			item.UpdatedAt = release.Manifest.CreatedAt
 		}
 		out = append(out, item)
@@ -307,6 +316,10 @@ func (a *Authority) NetworkDomains() []NetworkDomain {
 		if release, ok := a.observedReleases[domain]; ok {
 			item.ReleaseID = release.ReleaseID
 			item.CID = release.CID
+			item.Manifest = release.Manifest
+			if release.Manifest != nil {
+				item.Verified = VerifyRelease(claim.Controller, release.ReleaseID, *release.Manifest) == nil
+			}
 			item.UpdatedAt = release.Timestamp
 		}
 		out = append(out, item)
@@ -328,6 +341,57 @@ func (a *Authority) ResolveNetworkDomain(domain string) (*NetworkDomain, error) 
 		}
 	}
 	return nil, fmt.Errorf("domain not found on the active known mesh")
+}
+
+// ResolveVerifiedNetworkDomain refuses to hand out a gateway URL unless the
+// release manifest is signed by the domain controller and its release ID
+// matches the signed bytes. There is deliberately no unverified fallback.
+func (a *Authority) ResolveVerifiedNetworkDomain(domain string) (*NetworkDomain, error) {
+	item, err := a.ResolveNetworkDomain(domain)
+	if err != nil {
+		return nil, err
+	}
+	if item.Manifest == nil {
+		return nil, fmt.Errorf("release manifest unavailable for verification")
+	}
+	if err := VerifyRelease(item.Controller, item.ReleaseID, *item.Manifest); err != nil {
+		return nil, fmt.Errorf("release verification failed: %w", err)
+	}
+	item.Verified = true
+	return item, nil
+}
+
+// VerifyRelease checks a signed release manifest against the controller's
+// Ed25519 DID key and re-derives the release ID from the signed bytes.
+func VerifyRelease(controller, releaseID string, manifest api.ReleaseManifest) error {
+	encoded := strings.TrimPrefix(controller, "did:key:")
+	publicKey, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid controller key")
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(manifest.Signature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return fmt.Errorf("invalid release signature")
+	}
+	unsigned := manifest
+	unsigned.Signature = ""
+	canonical, err := canonicalJSON(unsigned)
+	if err != nil {
+		return err
+	}
+	if !ed25519.Verify(ed25519.PublicKey(publicKey), canonical, signature) {
+		return fmt.Errorf("signature does not match the domain controller")
+	}
+	sum := sha256.Sum256(append(canonical, signature...))
+	expected := "rcp2-" + hex.EncodeToString(sum[:16])
+	if expected != releaseID {
+		return fmt.Errorf("release id does not match the signed manifest")
+	}
+	return nil
+}
+
+func IsSafeCID(cid string) bool {
+	return safeCID(cid)
 }
 
 func safeCID(cid string) bool {

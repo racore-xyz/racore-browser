@@ -209,7 +209,7 @@ func (m *MeshNode) respond(nodeID string, addr *net.UDPAddr, msgType string, dat
 }
 
 func (m *MeshNode) heartbeatLoop(ctx context.Context) {
-	interval := time.Duration(	m.config.MeshHeartbeatSec) * time.Second
+	interval := time.Duration(m.config.MeshHeartbeatSec) * time.Second
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
@@ -457,7 +457,10 @@ func (m *MeshNode) Stop() error {
 func (m *MeshNode) Status() api.NodeStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	uptime := int64(time.Since(m.startedAt).Seconds())
+	uptime := int64(0)
+	if m.running && !m.startedAt.IsZero() {
+		uptime = int64(time.Since(m.startedAt).Seconds())
+	}
 	nodeID := ""
 	if m.identity != nil {
 		nodeID = m.identity.NodeID()

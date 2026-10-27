@@ -46,6 +46,8 @@ export function createDesktopBridge(interop: DesktopInterop) {
     platform: () => interop.invoke<PlatformInfo>("platform_info"),
     openBrowser: (url: string) =>
       interop.invoke<boolean>("open_browser", { url }),
+    browserAction: (action: "back" | "forward" | "reload") =>
+      interop.invoke<boolean>("browser_action", { action }),
     openExternal: (url: string) =>
       interop.invoke<void>("open_external", { url }),
     onDaemonExit: (callback: (payload: DaemonExitPayload) => void) =>
@@ -61,14 +63,11 @@ export const desktopBridge = createDesktopBridge({
 });
 
 export function isDesktopApp(): boolean {
-  return (
-    typeof document !== "undefined" &&
-    document.documentElement.dataset.desktop === "tauri"
-  );
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 export function installLegacyDesktopBridge(): void {
-  if (typeof window === "undefined" || window.racoreDesktop) return;
+  if (!isDesktopApp() || window.racoreDesktop) return;
   window.racoreDesktop = {
     isDesktop: true,
     daemonUrl: "http://127.0.0.1:47831",

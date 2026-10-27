@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/racore/god/internal/authority"
 	"github.com/racore/god/pkg/api"
 )
 
@@ -108,7 +107,7 @@ func TestDomainsHandlerList(t *testing.T) {
 func TestDomainsHandlerCreate(t *testing.T) {
 	s := setupTestServer(t)
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "/v1/authority/domains", strings.NewReader(`{"domain":"test-handler.com"}`))
+	r := httptest.NewRequest("POST", "/v1/authority/domains", strings.NewReader(`{"domain":"test-handler.racore"}`))
 	r.Header.Set("Content-Type", "application/json")
 	s.domainsHandler(w, r)
 
@@ -118,8 +117,19 @@ func TestDomainsHandlerCreate(t *testing.T) {
 
 	var result map[string]any
 	json.NewDecoder(w.Body).Decode(&result)
-	if result["domain"] != "test-handler.com" {
-		t.Fatalf("expected test-handler.com, got %v", result["domain"])
+	if result["domain"] != "test-handler.racore" {
+		t.Fatalf("expected test-handler.racore, got %v", result["domain"])
+	}
+}
+
+func TestDomainsHandlerRejectsPublicDomains(t *testing.T) {
+	s := setupTestServer(t)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/v1/authority/domains", strings.NewReader(`{"domain":"example.com"}`))
+	r.Header.Set("Content-Type", "application/json")
+	s.domainsHandler(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for public domain, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -128,13 +138,13 @@ func TestDomainAvailableHandler(t *testing.T) {
 
 	// First create a domain
 	w1 := httptest.NewRecorder()
-	r1 := httptest.NewRequest("POST", "/v1/authority/domains", strings.NewReader(`{"domain":"existing.com"}`))
+	r1 := httptest.NewRequest("POST", "/v1/authority/domains", strings.NewReader(`{"domain":"existing.racore"}`))
 	r1.Header.Set("Content-Type", "application/json")
 	s.domainsHandler(w1, r1)
 
 	// Check available
 	w2 := httptest.NewRecorder()
-	r2 := httptest.NewRequest("GET", "/v1/authority/domains/existing.com/available", nil)
+	r2 := httptest.NewRequest("GET", "/v1/authority/domains/existing.racore/available", nil)
 	s.domainByIDHandler(w2, r2)
 
 	if w2.Code != http.StatusOK {
@@ -143,34 +153,33 @@ func TestDomainAvailableHandler(t *testing.T) {
 	var avail map[string]any
 	json.NewDecoder(w2.Body).Decode(&avail)
 	if a, _ := avail["available"].(bool); a {
-		t.Fatal("existing.com should not be available")
+		t.Fatal("existing.racore should not be available")
 	}
 
 	// Check free domain
 	w3 := httptest.NewRecorder()
-	r3 := httptest.NewRequest("GET", "/v1/authority/domains/free.com/available", nil)
+	r3 := httptest.NewRequest("GET", "/v1/authority/domains/free.racore/available", nil)
 	s.domainByIDHandler(w3, r3)
 
 	var avail2 map[string]any
 	json.NewDecoder(w3.Body).Decode(&avail2)
 	if a, _ := avail2["available"].(bool); !a {
-		t.Fatal("free.com should be available")
+		t.Fatal("free.racore should be available")
 	}
 }
 
 func TestNetworkDomainCatalogAndResolver(t *testing.T) {
 	s := setupTestServer(t)
-	info, _, err := s.author.Create("demo.ra")
-	if err != nil {
+	if _, _, err := s.author.Create("demo.ra"); err != nil {
 		t.Fatal(err)
 	}
-	info.Releases = append(info.Releases, authority.ReleaseEntry{
-		ReleaseID: "rcp2-demo",
-		Manifest: api.ReleaseManifest{
-			Domain: "demo.ra", CID: "bafybeigdyrztabcdefghijklmnop",
-			CreatedAt: 100,
-		},
-	})
+	if _, err := s.author.PublishRelease("demo.ra", api.ReleaseManifest{
+		Version: "1.0.0", CID: "bafybeigdyrztabcdefghijklmnop",
+		ContentRoot: strings.Repeat("a", 64), Entrypoint: "index.html",
+		Files: 2, Size: 512,
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	list := httptest.NewRecorder()
 	s.networkDomainsHandler(list, httptest.NewRequest("GET", "/v1/authority/network-domains", nil))

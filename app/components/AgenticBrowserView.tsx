@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { daemonRequest } from "../lib/racore-client";
 import { desktopBridge, isDesktopApp } from "../lib/desktop";
 import { racoreDomainFromInput } from "../lib/racore-domains";
@@ -24,6 +23,13 @@ type BrowserTab = {
   query: string;
   messages: ChatMessage[];
   mediaUrl?: string;
+  lastUrl?: string;
+};
+type PendingAction = {
+  id: string;
+  type: string;
+  value: string;
+  tabId: string;
 };
 type Health = {
   mesh: { online: boolean; peers: number };
@@ -66,6 +72,10 @@ function isDirectVideoUrl(value: string): boolean {
   }
 }
 
+function normalizeDestination(value: string): string {
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
 function createTab(): BrowserTab {
   return {
     id:
@@ -76,6 +86,14 @@ function createTab(): BrowserTab {
     query: "",
     messages: [],
   };
+}
+
+function actionLabel(action: PendingAction): string {
+  if (action.type === "open_url") return `Open ${action.value}`;
+  if (action.type === "search_web") return `Search the web for “${action.value}”`;
+  if (action.type === "resolve_racore_domain")
+    return `Resolve Racore domain ${action.value}`;
+  return `${action.type}: ${action.value}`;
 }
 
 export function AgenticBrowserView() {
@@ -90,10 +108,15 @@ export function AgenticBrowserView() {
   const [storageReady, setStorageReady] = useState(false);
   const [mode, setMode] = useState<BrowserMode>("racore");
   const [networkDomains, setNetworkDomains] = useState<NetworkDomain[]>([]);
+  const [pending, setPending] = useState<PendingAction[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [videoKey, setVideoKey] = useState(0);
+  const menuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const query = activeTab?.query ?? "";
   const messages = activeTab?.messages ?? [];
   const mediaUrl = activeTab?.mediaUrl;
+  const pendingForTab = pending.filter((item) => item.tabId === activeTabId);
   const isUrl = useMemo(
     () => /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/.*)?$/i.test(query.trim()),
     [query],
@@ -139,7 +162,8 @@ export function AgenticBrowserView() {
             typeof tab.title === "string" &&
             typeof tab.query === "string" &&
             Array.isArray(tab.messages) &&
-            (tab.mediaUrl === undefined || isDirectVideoUrl(tab.mediaUrl)),
+            (tab.mediaUrl === undefined || isDirectVideoUrl(tab.mediaUrl)) &&
+            (tab.lastUrl === undefined || typeof tab.lastUrl === "string"),
         );
         if (!restored?.length) return;
         setTabs(restored);
@@ -166,6 +190,15 @@ export function AgenticBrowserView() {
     localStorage.setItem(MODE_STORAGE_KEY, mode);
   }, [tabs, activeTabId, mode, storageReady]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [menuOpen]);
+
   function updateActiveTab(update: (tab: BrowserTab) => BrowserTab) {
     setTabs((items) =>
       items.map((tab) => (tab.id === activeTabId ? update(tab) : tab)),
@@ -182,9 +215,11 @@ export function AgenticBrowserView() {
     setActiveTabId(tab.id);
     setError("");
     setEvents([]);
+    setMenuOpen(false);
   }
 
   function closeTab(id: string) {
+    setPending((items) => items.filter((item) => item.tabId !== id));
     if (tabs.length === 1) {
       const replacement = createTab();
       setTabs([replacement]);
@@ -199,6 +234,15 @@ export function AgenticBrowserView() {
     }
     setError("");
     setEvents([]);
+  }
+
+  async function openDestination(destination: string): Promise<void> {
+    updateActiveTab((tab) => ({ ...tab, lastUrl: destination }));
+    if (isDesktopApp()) {
+      await desktopBridge.openBrowser(destination);
+      return;
+    }
+    window.open(destination, "_blank", "noopener,noreferrer");
   }
 
   async function submit(event?: FormEvent) {
@@ -226,8 +270,7 @@ export function AgenticBrowserView() {
           `Resolved ${racoreDomain}`,
           `${resolved.source === "local" ? "Local authority" : "Mesh peer"} · ${resolved.cid}`,
         ]);
-        if (isDesktopApp()) await desktopBridge.openBrowser(resolved.gatewayUrl);
-        else window.open(resolved.gatewayUrl, "_blank", "noopener,noreferrer");
+        await openDestination(resolved.gatewayUrl);
       } catch (cause) {
         setError(
           cause instanceof Error ? cause.message : "Racore domain resolution failed.",
@@ -245,7 +288,7 @@ export function AgenticBrowserView() {
         );
         return;
       }
-      const normalized = /^https?:/i.test(input) ? input : `https://${input}`;
+      const normalized = normalizeDestination(input);
       if (isDirectVideoUrl(normalized)) {
         const videoUrl = new URL(normalized);
         const filename =
@@ -257,24 +300,19 @@ export function AgenticBrowserView() {
           query: "",
           messages: [],
           mediaUrl: normalized,
+          lastUrl: normalized,
         }));
         setError("");
         setEvents(["Direct video opened in Racore's private player"]);
         return;
       }
-      if (isDesktopApp()) await desktopBridge.openBrowser(input);
-      else
-        window.open(
-          normalized,
-          "_blank",
-          "noopener,noreferrer",
-        );
+      await openDestination(normalized);
       return;
     }
     if (mode === "web") {
-      const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(input)}`;
-      if (isDesktopApp()) await desktopBridge.openBrowser(searchUrl);
-      else window.open(searchUrl, "_blank", "noopener,noreferrer");
+      await openDestination(
+        `https://duckduckgo.com/?q=${encodeURIComponent(input)}`,
+      );
       return;
     }
     setLoading(true);
@@ -316,25 +354,20 @@ export function AgenticBrowserView() {
         ...items,
         `Verified local response from ${response.model || "Hammer 2.0 0.5B"}`,
       ]);
-      for (const action of response.actions || []) {
-        let destination = "";
-        if (action.type === "open_url") {
-          destination = /^https?:\/\//i.test(action.value)
-            ? action.value
-            : `https://${action.value}`;
-        } else if (action.type === "search_web") {
-          destination = `https://duckduckgo.com/?q=${encodeURIComponent(action.value)}`;
-        } else if (action.type === "resolve_racore_domain") {
-          const resolved = await daemonRequest<ResolvedDomain>(
-            `/v1/authority/resolve/${encodeURIComponent(action.value)}`,
-          );
-          destination = resolved.gatewayUrl;
-        }
-        if (destination) {
-          if (isDesktopApp()) await desktopBridge.openBrowser(destination);
-          else window.open(destination, "_blank", "noopener,noreferrer");
-          setEvents((items) => [...items, `${action.type}: ${action.value}`]);
-        }
+      const queued = (response.actions || [])
+        .filter((action) => action?.type && action?.value)
+        .map((action, index) => ({
+          id: `${Date.now()}-${index}-${action.type}`,
+          type: action.type,
+          value: action.value,
+          tabId: activeTabId,
+        }));
+      if (queued.length) {
+        setPending((items) => [...items, ...queued]);
+        setEvents((items) => [
+          ...items,
+          `${queued.length} action${queued.length === 1 ? "" : "s"} waiting for your approval`,
+        ]);
       }
     } catch (cause) {
       setError(
@@ -348,6 +381,67 @@ export function AgenticBrowserView() {
       ]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function approve(action: PendingAction) {
+    setPending((items) => items.filter((item) => item.id !== action.id));
+    try {
+      let destination = "";
+      if (action.type === "open_url") {
+        destination = normalizeDestination(action.value);
+      } else if (action.type === "search_web") {
+        destination = `https://duckduckgo.com/?q=${encodeURIComponent(action.value)}`;
+      } else if (action.type === "resolve_racore_domain") {
+        const resolved = await daemonRequest<ResolvedDomain>(
+          `/v1/authority/resolve/${encodeURIComponent(action.value)}`,
+        );
+        destination = resolved.gatewayUrl;
+      }
+      if (!destination) {
+        setError(`Unsupported action type: ${action.type}`);
+        return;
+      }
+      await openDestination(destination);
+      setEvents((items) => [...items, `Approved · ${action.type}: ${action.value}`]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Action failed");
+    }
+  }
+
+  function deny(action: PendingAction) {
+    setPending((items) => items.filter((item) => item.id !== action.id));
+    setEvents((items) => [...items, `Denied · ${action.type}: ${action.value}`]);
+  }
+
+  async function control(action: "back" | "forward" | "reload") {
+    if (action === "reload" && mediaUrl) {
+      setVideoKey((value) => value + 1);
+      return;
+    }
+    if (isDesktopApp()) {
+      try {
+        await desktopBridge.browserAction(action);
+        return;
+      } catch (cause) {
+        setError(
+          cause instanceof Error ? cause.message : "No browser window is open.",
+        );
+        return;
+      }
+    }
+    setError("Browser controls are available in Racore Desktop.");
+  }
+
+  async function copyAddress() {
+    const address = activeTab?.lastUrl || mediaUrl;
+    setMenuOpen(false);
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setEvents((items) => [...items, `Copied ${address}`]);
+    } catch {
+      setError("Clipboard access was denied.");
     }
   }
 
@@ -405,9 +499,9 @@ export function AgenticBrowserView() {
         <div />
       </div>
       <div className="real-toolbar">
-        <button aria-label="Back">‹</button>
-        <button aria-label="Forward">›</button>
-        <button aria-label="Reload">↻</button>
+        <button aria-label="Back" onClick={() => void control("back")}>‹</button>
+        <button aria-label="Forward" onClick={() => void control("forward")}>›</button>
+        <button aria-label="Reload" onClick={() => void control("reload")}>↻</button>
         <form onSubmit={submit}>
           <span>◆</span>
           <input
@@ -421,8 +515,93 @@ export function AgenticBrowserView() {
           />
           <button aria-label="Go">↗</button>
         </form>
-        <button aria-label="Menu">⋮</button>
+        <div className="toolbar-menu" ref={menuRef}>
+          <button
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            ⋮
+            {pendingForTab.length > 0 && (
+              <em className="toolbar-badge">{pendingForTab.length}</em>
+            )}
+          </button>
+          {menuOpen && (
+            <div className="toolbar-popover" role="menu">
+              <button role="menuitem" onClick={addTab}>New tab</button>
+              <button role="menuitem" onClick={() => closeTab(activeTabId)}>
+                Close tab
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void control("reload");
+                }}
+              >
+                Reload
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => void copyAddress()}
+                disabled={!activeTab?.lastUrl && !mediaUrl}
+              >
+                Copy address
+              </button>
+              <button
+                role="menuitem"
+                onClick={async () => {
+                  const address = activeTab?.lastUrl || mediaUrl;
+                  setMenuOpen(false);
+                  if (address && isDesktopApp())
+                    await desktopBridge.openExternal(address);
+                }}
+                disabled={!activeTab?.lastUrl && !mediaUrl}
+              >
+                Open in system browser
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+      {pendingForTab.length > 0 && (
+        <section className="approval-dock" aria-live="polite">
+          {pendingForTab.map((action) => (
+            <article className="approval-card" key={action.id}>
+              <span className="approval-icon">!</span>
+              <div>
+                <small>HUMAN APPROVAL REQUIRED</small>
+                <b>{actionLabel(action)}</b>
+                <p>
+                  The local planner requested an external side effect. Nothing
+                  opens until you approve it on this device.
+                </p>
+                <div className="risk">
+                  <span>⚠</span>
+                  <div>
+                    <b>{action.type}</b>
+                    <small>Runs through your normal browser profile</small>
+                  </div>
+                </div>
+              </div>
+              <footer>
+                <button
+                  className="secondary"
+                  onClick={() => deny(action)}
+                >
+                  Deny
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => void approve(action)}
+                >
+                  Approve & open
+                </button>
+              </footer>
+            </article>
+          ))}
+        </section>
+      )}
       <main className="real-page">
         {mediaUrl ? (
           <section className="browser-video-page">
@@ -446,6 +625,7 @@ export function AgenticBrowserView() {
             </header>
             <div className="browser-video-stage">
               <video
+                key={videoKey}
                 src={mediaUrl}
                 controls
                 playsInline
@@ -462,13 +642,11 @@ export function AgenticBrowserView() {
           </section>
         ) : !messages.length && !loading && !error ? (
           <section className="simple-home">
-            <Image
-              src="/brand/racore-logo.png"
-              alt="Racore.xyz"
-              width={420}
-              height={105}
-              priority
-            />
+            <div className="terminal-wordmark" aria-label="Racore.xyz" role="img">
+              <span>RACORE</span>
+              <b>.XYZ</b>
+              <i>▮</i>
+            </div>
             <h1>Browse. Ask. Act with approval.</h1>
             <p className="browser-mode-copy">
               {mode === "racore"

@@ -19,12 +19,22 @@ type IPFSStatus = {
   error?: string;
 };
 type Peer = {
-  node_id: string;
+  nodeId: string;
   name: string;
   address: string;
   roles: string[];
-  last_seen: number;
+  lastSeen: number;
 };
+
+function formatUptime(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "—";
+  const seconds = Math.floor(totalSeconds % 60);
+  const minutes = Math.floor((totalSeconds / 60) % 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 
 export function LiveNetworkView() {
   const [mesh, setMesh] = useState<MeshStatus | null>(null);
@@ -44,7 +54,7 @@ export function LiveNetworkView() {
       setMessage("");
     } catch {
       setMessage(
-        "The live network requires Racore Desktop or the local Python daemon.",
+        "The live network requires Racore Desktop or the local Go daemon.",
       );
     }
   }
@@ -114,7 +124,7 @@ export function LiveNetworkView() {
         <article>
           <span>UPTIME</span>
           <strong>
-            {mesh ? `${Math.floor(mesh.uptimeSeconds / 60)}m` : "—"}
+            {mesh ? formatUptime(mesh.uptimeSeconds) : "—"}
           </strong>
           <small>{mesh?.transport || "rmp/0.1"}</small>
         </article>
@@ -144,7 +154,7 @@ export function LiveNetworkView() {
               <span>R</span>
             </div>
             {peers.slice(0, 5).map((peer, index) => (
-              <span className={`real-peer rp${index + 1}`} key={peer.node_id}>
+              <span className={`real-peer rp${index + 1}`} key={peer.nodeId}>
                 <i />
                 {peer.name}
               </span>
@@ -159,7 +169,7 @@ export function LiveNetworkView() {
             </span>
           </header>
           {[
-            ["Python daemon", Boolean(mesh)],
+            ["Go agent service", Boolean(mesh)],
             ["Signed mesh identity", Boolean(mesh?.nodeId)],
             ["UDP multicast discovery", Boolean(mesh?.online)],
             ["Kubo RPC", Boolean(ipfs?.online)],
@@ -196,7 +206,7 @@ export function LiveNetworkView() {
           </div>
           {peers.length ? (
             peers.map((peer) => (
-              <div className="tr" key={peer.node_id}>
+              <div className="tr" key={peer.nodeId}>
                 <span>
                   <i className="node-icon">◎</i>
                   <b>{peer.name}</b>
@@ -205,7 +215,7 @@ export function LiveNetworkView() {
                   <code>{peer.address}</code>
                 </span>
                 <span>{peer.roles.join(", ")}</span>
-                <span>{new Date(peer.last_seen * 1000).toLocaleTimeString()}</span>
+                <span>{new Date(peer.lastSeen).toLocaleTimeString()}</span>
                 <span>
                   <em className="status live">● Verified</em>
                 </span>

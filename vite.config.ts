@@ -46,7 +46,15 @@ export default defineConfig(async () => {
   return {
     server: {
       watch: {
-        ignored: ["**/work/**", "**/desktop/runtime/**", "**/desktop-dist/**"],
+        ignored: [
+          "**/work/**",
+          "**/desktop/runtime/**",
+          "**/desktop-dist/**",
+          "**/dist-desktop/**",
+          "**/src-tauri/**",
+          "**/god/**",
+          "**/.wrangler/**",
+        ],
         ...(isCodexSeatbeltSandbox
           ? { useFsEvents: false, usePolling: true }
           : {}),

@@ -1,7 +1,7 @@
 use crate::error::{CommandError, CommandResult};
 use crate::models::{DaemonRequest, DaemonResponse, PlatformInfo};
 use crate::state::AppState;
-use crate::windows::{normalize_web_url, open_browser_window};
+use crate::windows::{browser_control, normalize_web_url, open_browser_window};
 use serde_json::{json, Value};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -33,8 +33,13 @@ pub fn platform_info(app: AppHandle) -> PlatformInfo {
 }
 
 #[tauri::command]
-pub fn open_browser(app: AppHandle, url: String) -> CommandResult<bool> {
+pub async fn open_browser(app: AppHandle, url: String) -> CommandResult<bool> {
     open_browser_window(&app, &url)
+}
+
+#[tauri::command]
+pub async fn browser_action(app: AppHandle, action: String) -> CommandResult<bool> {
+    browser_control(&app, &action)
 }
 
 #[tauri::command]

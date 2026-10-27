@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/ipv4"
@@ -54,24 +56,31 @@ func (t *UDPTransport) Start() error {
 		return nil
 	}
 
-	addr := &net.UDPAddr{Port: t.group.Port}
-	conn, err := net.ListenUDP("udp4", addr)
+	listenConfig := net.ListenConfig{
+		Control: func(_, _ string, raw syscall.RawConn) error {
+			var sockErr error
+			if err := raw.Control(func(fd uintptr) {
+				sockErr = setReuseAddress(fd)
+			}); err != nil {
+				return err
+			}
+			return sockErr
+		},
+	}
+	bound, err := listenConfig.ListenPacket(
+		context.Background(),
+		"udp4",
+		fmt.Sprintf(":%d", t.group.Port),
+	)
 	if err != nil {
 		return fmt.Errorf("listen udp %d: %w", t.group.Port, err)
 	}
+	conn, ok := bound.(*net.UDPConn)
+	if !ok {
+		bound.Close()
+		return fmt.Errorf("listen udp %d: unexpected connection type", t.group.Port)
+	}
 	t.conn = conn
-
-	file, err := conn.File()
-	if err != nil {
-		conn.Close()
-		return fmt.Errorf("conn file: %w", err)
-	}
-	defer file.Close()
-
-	if err := setReuseAddress(file.Fd()); err != nil {
-		conn.Close()
-		return fmt.Errorf("setsockopt reuseaddr: %w", err)
-	}
 
 	pc := ipv4.NewPacketConn(conn)
 	t.pc = pc
@@ -88,10 +97,14 @@ func (t *UDPTransport) Start() error {
 		return fmt.Errorf("set multicast ttl: %w", err)
 	}
 
-	if err := pc.SetControlMessage(ipv4.FlagTTL|ipv4.FlagDst, true); err != nil {
-		pc.Close()
-		conn.Close()
-		return fmt.Errorf("set control message: %w", err)
+	// x/net/ipv4 does not implement control-message reception on Windows.
+	// ReadFrom still delivers payloads and source addresses there.
+	if runtime.GOOS != "windows" {
+		if err := pc.SetControlMessage(ipv4.FlagTTL|ipv4.FlagDst, true); err != nil {
+			pc.Close()
+			conn.Close()
+			return fmt.Errorf("set control message: %w", err)
+		}
 	}
 
 	t.started.Store(true)

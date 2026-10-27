@@ -23,6 +23,7 @@ pub fn run() {
             commands::daemon_request,
             commands::platform_info,
             commands::open_browser,
+            commands::browser_action,
             commands::open_external,
         ])
         .setup(|app| {

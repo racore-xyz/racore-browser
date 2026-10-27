@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"context"
-	"net"
 	"os"
 	"sync/atomic"
 	"testing"
@@ -632,17 +631,7 @@ func TestHandleGoodbyeMessage(t *testing.T) {
 	}
 	defer mn.Stop()
 
-	// Add a fake peer manually
-	mn.peerStore.AddOrUpdate(api.Peer{
-		NodeID:   "fake-peer-id",
-		Name:     "FakePeer",
-		LastSeen: time.Now().UnixMilli(),
-	})
-	mn.mu.Lock()
-	mn.peerAddrs["fake-peer-id"] = &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: cfg.MeshPort}
-	mn.mu.Unlock()
-
-	// Instead of faking, let's send an actual goodbye from a second node
+	// Send a real goodbye from a second node.
 	dir2, _ := os.MkdirTemp("", "god-mesh-hg2-*")
 	defer os.RemoveAll(dir2)
 
@@ -668,12 +657,16 @@ func TestHandleGoodbyeMessage(t *testing.T) {
 		t.Skip("peers did not discover each other")
 	}
 
+	nodeID := mn2.Identity().NodeID()
+
 	// Stop node2 gracefully - this broadcasts goodbye
 	mn2.Stop()
 
 	time.Sleep(500 * time.Millisecond)
 
-	if mn.peerStore.Count() != 0 {
-		t.Fatalf("expected 0 peers after goodbye, got %d", mn.peerStore.Count())
+	for _, peer := range mn.peerStore.List() {
+		if peer.NodeID == nodeID {
+			t.Fatalf("peer %s still present after goodbye", nodeID)
+		}
 	}
 }

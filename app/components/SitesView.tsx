@@ -11,6 +11,7 @@ type Release = {
   createdAt: number;
   files: number;
   size: number;
+  verified: boolean;
 };
 type Domain = {
   domain: string;
@@ -20,6 +21,11 @@ type Domain = {
   current: string | null;
   releases: Release[];
 };
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
 
 export function SitesView() {
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -37,7 +43,12 @@ export function SitesView() {
   }
   useEffect(() => {
     const timer = setTimeout(() => void refresh(), 0);
-    return () => clearTimeout(timer);
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   async function claim() {
@@ -125,8 +136,8 @@ export function SitesView() {
         <p>
           Works with Vite, React, Vue, Svelte, Angular, Next static export, or
           any build folder containing index.html. The CLI hashes every file,
-          creates a compressed bundle, uploads it to the bundled Kubo node, and
-          asks the authority to sign the release.
+          uploads it to the local Kubo node as a UnixFS directory, and asks the
+          authority to sign the release.
         </p>
       </section>
       <div className="real-domain-list">
@@ -158,7 +169,7 @@ export function SitesView() {
                 </span>
                 <span>
                   <small>CLAIMED</small>
-                  <b>{new Date(item.createdAt * 1000).toLocaleDateString()}</b>
+                  <b>{new Date(item.createdAt).toLocaleDateString()}</b>
                 </span>
               </div>
               {item.releases.length ? (
@@ -168,9 +179,11 @@ export function SitesView() {
                       <b>v{release.version}</b>
                       <code>{release.cid}</code>
                       <span>
-                        {release.files} files ·{" "}
-                        {(release.size / 1024).toFixed(1)} KB
+                        {release.files} files · {formatSize(release.size)}
                       </span>
+                      <em className={`status ${release.verified ? "live" : "draft"}`}>
+                        ● {release.verified ? "verified" : "unverified"}
+                      </em>
                     </div>
                   ))}
                 </div>

@@ -1,10 +1,7 @@
 use crate::error::{CommandError, CommandResult};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{webview::NewWindowResponse, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use url::Url;
-
-static NEXT_BROWSER_WINDOW: AtomicU64 = AtomicU64::new(1);
 
 pub fn normalize_web_url(raw: &str) -> CommandResult<Url> {
     let trimmed = raw.trim();
@@ -43,15 +40,35 @@ pub fn browser_profile_dir(app: &AppHandle) -> CommandResult<PathBuf> {
 
 pub fn open_browser_window(app: &AppHandle, raw: &str) -> CommandResult<bool> {
     let url = normalize_web_url(raw)?;
-    let label = format!(
-        "browser-{}",
-        NEXT_BROWSER_WINDOW.fetch_add(1, Ordering::Relaxed)
-    );
+    // Window creation must run on the event loop. A synchronous command already
+    // occupies that thread, so queue the work and wait for its result here.
+    let handle = app.clone();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let _ = sender.send(show_browser_window(&handle, url));
+    })
+    .map_err(|error| CommandError::backend(error.to_string()))?;
+    match receiver.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(result) => result.map(|()| true),
+        Err(_) => Err(CommandError::backend(
+            "browser window did not start in time",
+        )),
+    }
+}
+
+fn show_browser_window(app: &AppHandle, url: Url) -> CommandResult<()> {
+    if let Some(window) = app.get_webview_window("browser") {
+        window
+            .navigate(url)
+            .map_err(|error| CommandError::backend(error.to_string()))?;
+        let _ = window.set_focus();
+        return Ok(());
+    }
     let data_directory = browser_profile_dir(app)?;
     std::fs::create_dir_all(&data_directory)
         .map_err(|error| CommandError::backend(error.to_string()))?;
 
-    WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
+    WebviewWindowBuilder::new(app, "browser", WebviewUrl::External(url))
         .title("Racore Web")
         .inner_size(1280.0, 820.0)
         .data_directory(data_directory)
@@ -77,6 +94,30 @@ pub fn open_browser_window(app: &AppHandle, raw: &str) -> CommandResult<bool> {
         })
         .build()
         .map_err(|error| CommandError::backend(error.to_string()))?;
+    Ok(())
+}
+
+pub fn browser_control(app: &AppHandle, action: &str) -> CommandResult<bool> {
+    let script = match action {
+        "back" => "history.back()",
+        "forward" => "history.forward()",
+        "reload" => "location.reload()",
+        other => {
+            return Err(CommandError::invalid(format!(
+                "unsupported browser action: {other}"
+            )))
+        }
+    };
+    let window = app
+        .get_webview_window("browser")
+        .ok_or_else(|| CommandError::invalid("no Racore browser window is open"))?;
+    let script = script.to_owned();
+    app.run_on_main_thread(move || {
+        if let Err(error) = window.eval(&script) {
+            eprintln!("racore: browser action failed: {error}");
+        }
+    })
+    .map_err(|error| CommandError::backend(error.to_string()))?;
     Ok(true)
 }
 

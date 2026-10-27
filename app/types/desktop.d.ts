@@ -16,6 +16,7 @@ declare global {
       api(request: DaemonApiRequest): Promise<DaemonApiResponse>;
       platform(): Promise<PlatformInfo>;
       openBrowser(url: string): Promise<boolean>;
+      browserAction(action: "back" | "forward" | "reload"): Promise<boolean>;
       openExternal(url: string): Promise<void>;
       onDaemonExit(callback: (code: number | null) => void): Promise<() => void>;
     };

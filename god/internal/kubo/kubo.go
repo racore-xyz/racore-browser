@@ -110,17 +110,32 @@ func (m *Manager) Start(ctx context.Context) (map[string]any, error) {
 }
 
 func (m *Manager) Stop() {
-	if m.cmd != nil && m.cmd.Process != nil {
-		m.cmd.Process.Signal(os.Interrupt)
-		done := make(chan any, 1)
-		go func() {
-			m.cmd.Wait()
-			done <- nil
-		}()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			m.cmd.Process.Kill()
+	cmd := m.cmd
+	m.cmd = nil
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+
+	// Ask the daemon to shut down through its RPC API. Process signals are not
+	// portable on Windows, and a clean shutdown unpins safely before exit.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	req, err := http.NewRequestWithContext(ctx, "POST", m.apiURL+"/api/v0/shutdown", nil)
+	if err == nil {
+		if resp, err := m.client.Do(req); err == nil {
+			resp.Body.Close()
 		}
+	}
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		_ = cmd.Process.Kill()
+		<-done
 	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,12 +8,69 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 )
 
 var apiBase = "http://127.0.0.1:47831"
+
+type buildFile struct {
+	name string
+	data []byte
+}
+
+var (
+	quotedRootPathPattern = regexp.MustCompile(`["'\x60](/[^"'\x60\s]+)["'\x60]`)
+	cssURLPattern         = regexp.MustCompile(`url\(\s*["']?(/[^"')\s]+)`)
+)
+
+// rootRelativeWarnings reports build references that start at the gateway root.
+// A release is served from /ipfs/<cid>/, so "/assets/app.js" misses the release
+// even though the file is inside it.
+func rootRelativeWarnings(files []buildFile) []string {
+	known := make(map[string]bool, len(files))
+	for _, file := range files {
+		known[strings.ToLower(file.name)] = true
+	}
+	seen := make(map[string]bool)
+	warnings := make([]string, 0)
+	for _, file := range files {
+		switch strings.ToLower(path.Ext(file.name)) {
+		case ".html", ".htm", ".css", ".js", ".mjs":
+		default:
+			continue
+		}
+		matches := quotedRootPathPattern.FindAllSubmatch(file.data, -1)
+		matches = append(matches, cssURLPattern.FindAllSubmatch(file.data, -1)...)
+		for _, match := range matches {
+			raw := string(match[1])
+			if strings.HasPrefix(raw, "//") {
+				continue
+			}
+			target := raw
+			if cut := strings.IndexAny(target, "?#"); cut >= 0 {
+				target = target[:cut]
+			}
+			target = strings.TrimPrefix(target, "/")
+			if target == "" || !known[strings.ToLower(target)] || seen[target] {
+				continue
+			}
+			seen[target] = true
+			warnings = append(warnings, fmt.Sprintf(
+				"%s references %q from the site root; under /ipfs/<cid>/ it resolves to %s instead of %s. Rebuild with a relative base (for example Vite base: \"./\").",
+				file.name, raw, raw, target,
+			))
+		}
+	}
+	sort.Strings(warnings)
+	return warnings
+}
 
 func main() {
 	if len(os.Args) < 2 || os.Args[1] == "--help" || os.Args[1] == "-h" {
@@ -92,42 +148,69 @@ func main() {
 }
 
 func publish(domain, buildDir, version string) {
-	index, err := os.Stat(filepath.Join(buildDir, "index.html"))
-	if err != nil {
+	if _, err := os.Stat(filepath.Join(buildDir, "index.html")); err != nil {
 		fatal("build directory must contain index.html")
 	}
-	_ = index
 
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-
+	files := make([]buildFile, 0)
 	fileIndex := make([]map[string]string, 0)
 	totalSize := 0
 
-	filepath.WalkDir(buildDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+	walkErr := filepath.WalkDir(buildDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
 			return err
 		}
-		rel, _ := filepath.Rel(buildDir, path)
+		rel, err := filepath.Rel(buildDir, path)
+		if err != nil {
+			return err
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-
-		fw, _ := zw.Create(rel)
-		fw.Write(data)
-
-		h := sha256.Sum256(data)
+		sum := sha256.Sum256(data)
+		files = append(files, buildFile{name: filepath.ToSlash(rel), data: data})
 		fileIndex = append(fileIndex, map[string]string{
-			"path": rel, "sha256": hex.EncodeToString(h[:]),
+			"path": filepath.ToSlash(rel), "sha256": hex.EncodeToString(sum[:]),
 		})
 		totalSize += len(data)
 		return nil
 	})
-	zw.Close()
+	if walkErr != nil {
+		fatal("read build directory: %v", walkErr)
+	}
+	if len(files) == 0 {
+		fatal("build directory is empty")
+	}
+	for _, warning := range rootRelativeWarnings(files) {
+		fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
+	}
 
 	indexData, _ := json.Marshal(fileIndex)
-	contentRoot := hex.EncodeToString(sha256.New().Sum(indexData))[:64]
+	contentRoot := sha256.Sum256(indexData)
+
+	var upload bytes.Buffer
+	writer := multipart.NewWriter(&upload)
+	paths := make([]string, 0, len(files))
+	for _, file := range files {
+		name := strings.ReplaceAll(file.name, "\\", "/")
+		part, err := writer.CreateFormFile("file", path.Base(name))
+		if err != nil {
+			fatal("build upload: %v", err)
+		}
+		if _, err := part.Write(file.data); err != nil {
+			fatal("build upload: %v", err)
+		}
+		paths = append(paths, name)
+	}
+	pathIndex, err := json.Marshal(paths)
+	if err != nil {
+		fatal("build upload: %v", err)
+	}
+	if err := writer.WriteField("paths", string(pathIndex)); err != nil {
+		fatal("build upload: %v", err)
+	}
+	writer.Close()
 
 	if !isDomainOwned(domain) {
 		if !isDomainAvailable(domain) {
@@ -137,17 +220,21 @@ func publish(domain, buildDir, version string) {
 		fmt.Printf("claimed domain %s\n", domain)
 	}
 
-	uploadResp := doRequest("POST", "/v1/ipfs/add", "application/octet-stream", buf.Bytes())
+	uploadResp := doRequest("POST", "/v1/ipfs/add", writer.FormDataContentType(), upload.Bytes())
 	var uploadResult map[string]any
-	json.Unmarshal(uploadResp, &uploadResult)
-
+	if err := json.Unmarshal(uploadResp, &uploadResult); err != nil {
+		fatal("invalid upload response: %v", err)
+	}
 	cid, _ := uploadResult["cid"].(string)
-	fmt.Printf("uploaded to IPFS: %s\n", cid)
+	if cid == "" {
+		fatal("upload did not return a content identifier: %s", string(uploadResp))
+	}
+	fmt.Printf("uploaded %d files to IPFS: %s\n", len(files), cid)
 
 	releaseBody := map[string]any{
 		"version":     version,
 		"cid":         cid,
-		"contentRoot": contentRoot,
+		"contentRoot": hex.EncodeToString(contentRoot[:]),
 		"entrypoint":  "index.html",
 		"files":       len(fileIndex),
 		"size":        totalSize,

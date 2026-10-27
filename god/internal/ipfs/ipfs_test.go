@@ -2,8 +2,10 @@ package ipfs
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -37,8 +39,11 @@ func TestStatusOnline(t *testing.T) {
 	if status["online"] != true {
 		t.Fatal("expected online")
 	}
-	if status["ID"] != "test-peer" {
-		t.Fatalf("expected test-peer, got %v", status["ID"])
+	if status["peerId"] != "test-peer" {
+		t.Fatalf("expected test-peer, got %v", status["peerId"])
+	}
+	if status["agentVersion"] != "kubo/0.29" {
+		t.Fatalf("expected normalized agent version, got %v", status["agentVersion"])
 	}
 }
 
@@ -132,6 +137,66 @@ func TestPublishIPNS(t *testing.T) {
 	}
 	if result["Name"] != "k51..." {
 		t.Fatalf("expected k51..., got %v", result["Name"])
+	}
+}
+
+func TestAddFilesPreservesNestedPaths(t *testing.T) {
+	var written []string
+	var pinned string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v0/files/write":
+			written = append(written, r.URL.Query().Get("arg"))
+			if r.URL.Query().Get("parents") != "true" {
+				t.Errorf("files write must create parent directories")
+			}
+			io.Copy(io.Discard, r.Body)
+			w.Write([]byte(`{"Name":"written"}`))
+		case "/api/v0/files/stat":
+			if got := r.URL.Query().Get("arg"); !strings.HasPrefix(got, "/racore-publish-") {
+				t.Errorf("unexpected mfs root %q", got)
+			}
+			w.Write([]byte(`{"Hash":"bafytestdirectory","Type":"directory"}`))
+		case "/api/v0/pin/add":
+			pinned = r.URL.Query().Get("arg")
+			w.Write([]byte(`{"Pins":["bafytestdirectory"]}`))
+		case "/api/v0/files/rm":
+			w.Write([]byte(`{}`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	b := New(srv.URL, "http://127.0.0.1:8180")
+	result, err := b.AddFiles(context.Background(), []File{
+		{Name: "index.html", Data: []byte("<h1>hi</h1>")},
+		{Name: "assets/app.css", Data: []byte("body{}")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["cid"] != "bafytestdirectory" {
+		t.Fatalf("expected directory cid, got %v", result["cid"])
+	}
+	if pinned != "bafytestdirectory" {
+		t.Fatalf("expected pinned directory cid, got %q", pinned)
+	}
+	if len(written) != 2 {
+		t.Fatalf("expected 2 mfs writes, got %v", written)
+	}
+	if !strings.HasSuffix(written[0], "/index.html") {
+		t.Fatalf("expected index.html write, got %q", written[0])
+	}
+	if !strings.HasSuffix(written[1], "/assets/app.css") {
+		t.Fatalf("expected nested asset write, got %q", written[1])
+	}
+}
+
+func TestAddFilesRejectsEmptyInput(t *testing.T) {
+	b := New("http://127.0.0.1:1", "http://127.0.0.1:8180")
+	if _, err := b.AddFiles(context.Background(), nil); err == nil {
+		t.Fatal("expected error for empty file list")
 	}
 }
 

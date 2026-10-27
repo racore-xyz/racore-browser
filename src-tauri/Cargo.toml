@@ -1,6 +1,6 @@
 [package]
 name = "racore-browser"
-version = "0.1.0"
+version = "0.2.0"
 description = "Racore Browser desktop shell"
 authors = ["Racore"]
 edition = "2021"

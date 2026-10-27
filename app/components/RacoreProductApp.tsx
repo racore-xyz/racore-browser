@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AgenticBrowserView } from "./AgenticBrowserView";
 import { LiveNetworkView } from "./LiveNetworkView";
@@ -49,7 +48,7 @@ function SystemView() {
         <article><i className={health ? "ready" : "waiting"}>{health ? "✓" : "○"}</i><div><b>Go agent service</b><p>Local AI planner, authority, approvals, and mesh</p></div><span>{health ? "Running on 127.0.0.1:47831" : "Not detected"}</span></article>
         <article><i className={ipfs?.online ? "ready" : "waiting"}>{ipfs?.online ? "✓" : "○"}</i><div><b>IPFS Kubo</b><p>Bundled content-addressed storage node</p></div><span>{ipfs?.online ? ipfs.agentVersion : "Not detected"}</span></article>
         <article><i className={platform?.packaged ? "ready" : "waiting"}>{platform?.packaged ? "✓" : "○"}</i><div><b>Racore CLI</b><p>Framework build publishing tool included with the desktop app</p></div><span>{platform?.packaged ? "Bundled native sidecar" : "Available in desktop package"}</span></article>
-        <article><i className={mesh?.online ? "ready" : "waiting"}>{mesh?.online ? "✓" : "○"}</i><div><b>Racoon Mesh</b><p>Signed RMP discovery and live connector events</p></div><span>{mesh?.online ? "Online" : "Not detected"}</span></article>
+        <article><i className={mesh?.online ? "ready" : "waiting"}>{mesh?.online ? "✓" : "○"}</i><div><b>Racore Mesh</b><p>Signed RMP discovery and live connector events</p></div><span>{mesh?.online ? "Online" : "Not detected"}</span></article>
       </div>
       <section className="safety-card"><span>HUMAN-IN-THE-LOOP</span><h2>External side effects require explicit approval.</h2><p>Racore uses the user&apos;s configured network path and respects site policies. It does not bypass CAPTCHAs, access controls, rate limits, or bans.</p></section>
     </div>
@@ -79,7 +78,10 @@ export function RacoreProductApp() {
   return (
     <main className="browser-app">
       <aside className="utility-rail">
-        <div className="rail-logo"><Image src="/brand/racore-logo.png" alt="Racore" width={170} height={43} /></div>
+        <div className="rail-logo" aria-label="Racore" role="img">
+          <b>R</b>
+          <i>{"///"}</i>
+        </div>
         <nav>{navigation.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)} title={item.label}><i>{item.icon}</i><span>{item.label}</span></button>)}</nav>
         <button className="reopen-onboarding" onClick={() => setOnboarded(false)} title="Open onboarding">?</button>
       </aside>

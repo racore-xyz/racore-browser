@@ -292,3 +292,61 @@ func TestReleasePersistence(t *testing.T) {
 		t.Fatalf("expected 0 releases, got %d", len(rels))
 	}
 }
+
+func TestVerifyReleaseRejectsTamperedManifest(t *testing.T) {
+	a := New(t.TempDir())
+	if _, _, err := a.Create("verify.racore"); err != nil {
+		t.Fatal(err)
+	}
+	published, err := a.PublishRelease("verify.racore", api.ReleaseManifest{
+		Version: "1.0.0", CID: "bafybeigdyrztabcdefghijklmnop",
+		ContentRoot: strings.Repeat("b", 64), Entrypoint: "index.html",
+		Files: 2, Size: 512,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rels, err := a.Releases("verify.racore")
+	if err != nil || len(rels) != 1 {
+		t.Fatalf("expected one release, got %d (%v)", len(rels), err)
+	}
+
+	var controller string
+	for _, info := range a.List() {
+		if info.Domain == "verify.racore" {
+			controller = info.Controller
+		}
+	}
+	if controller == "" {
+		t.Fatal("expected domain controller")
+	}
+	if err := VerifyRelease(controller, rels[0].ReleaseID, *published); err != nil {
+		t.Fatalf("expected valid manifest to verify: %v", err)
+	}
+
+	tampered := *published
+	tampered.CID = "bafybeigdyrztzzzzzzzzzzzzzzzz"
+	if err := VerifyRelease(controller, rels[0].ReleaseID, tampered); err == nil {
+		t.Fatal("expected tampered CID to fail verification")
+	}
+
+	tampered = *published
+	tampered.Domain = "other.racore"
+	if err := VerifyRelease(controller, rels[0].ReleaseID, tampered); err == nil {
+		t.Fatal("expected wrong domain to fail verification")
+	}
+
+	if err := VerifyRelease(controller, "rcp2-00000000000000000000000000000000", *published); err == nil {
+		t.Fatal("expected release ID mismatch to fail verification")
+	}
+}
+
+func TestResolveVerifiedNetworkDomainRejectsUnsigned(t *testing.T) {
+	a := New(t.TempDir())
+	a.ObserveClaim("unsigned.ra", "did:key:remote", "node-9")
+	a.ObserveRelease("unsigned.ra", "rcp2-abc", "bafybeigdyrztabcdefghijklmnop", "node-9")
+
+	if _, err := a.ResolveVerifiedNetworkDomain("unsigned.ra"); err == nil {
+		t.Fatal("expected unsigned observed release to be rejected")
+	}
+}
